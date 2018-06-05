@@ -18,6 +18,7 @@ volatile ring_buf_t tx_buf[2];
 volatile uint8_t spi_status;
 
 volatile uint8_t last_spi_byte_tmr;
+volatile uint8_t spi_bytes;
 
 void spi_init_slave(void);
 

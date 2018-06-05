@@ -12,34 +12,48 @@
 #include "spi.h"
 
 #define F_CPU 8000000L
-/*
+
+#define J1850_MSG_BUF_SIZE 16
+#define J1850_BUSSES 2
+
 typedef struct j1850_bus_t j1850_bus_t;
 typedef struct j1850_msg_buf_t j1850_msg_buf_t;
 
 struct j1850_msg_buf_t {
-	uint8_t buf[8][12];
-	uint8_t bytes[8];
-	uint8_t messages;
+	uint8_t buf[12];
+	uint8_t bytes;
 	uint8_t byte_ptr;
 	uint8_t bit_ptr;
 };
 
 struct j1850_bus_t {
-	uint8_t *port_reg;
-	uint8_t *pin_reg;
-	uint8_t *ddr_reg;
+	volatile uint8_t *port_reg;
+	uint8_t port_msk;
+	volatile uint8_t *pin_reg;
 	uint8_t pin_msk;
+	volatile uint8_t *ddrpin_reg;
+	volatile uint8_t *ddrport_reg;
+	volatile uint8_t *pcint_reg;
+	uint8_t pcint_msk;
 	uint8_t last_pin;
 	uint8_t state;
 	uint8_t ltmr;
 	uint8_t new_msg;
-	j1850_msg_buf_t rx_buf;
-	j1850_msg_buf_t tx_buf;
+	j1850_msg_buf_t rx_buf[J1850_MSG_BUF_SIZE];
+	uint8_t rx_msg_start;
+	uint8_t rx_msg_end;
+	j1850_msg_buf_t tx_buf[J1850_MSG_BUF_SIZE];
+	uint8_t tx_msg_start;
+	uint8_t tx_msg_end;
 };
 
-volatile j1850_bus_t j1850_bus[2];
-*/
+volatile j1850_bus_t j1850_bus[J1850_BUSSES];
+// 0 - J1850 IN - ACC
+// 1 - J1850 OUT - RADIO
 
+volatile uint8_t j1850_wire_mode;
+
+/*
 volatile uint8_t j1850_state[2];
 // 0 - Idle
 // 1 - SOF?
@@ -57,7 +71,7 @@ volatile uint8_t j1850_tx_buf[2][12];
 volatile uint8_t j1850_tx_bytes[2];
 volatile uint8_t j1850_tx_byte[2];
 volatile uint8_t j1850_tx_bit[2];
-
+*/
 
 volatile uint8_t j1850_last_pin;
 
