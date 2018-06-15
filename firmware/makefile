@@ -1,13 +1,13 @@
 PRG            = pi-j1850-interface
-OBJ            = main.o spi.o j1850.o ringbuffer.o
+OBJ            = main.o spi.o j1850.o
 MCU_TARGET     = atmega328p
-OPTIMIZE       = -O2
+OPTIMIZE       = -O3
 DEFS           = 
 LIBS           = 
 # You should not have to change anything below here.
 CC             = avr-gcc
 # Override is only needed by avr-lib build system.
-override CFLAGS        = -g -Wall $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS)
+override CFLAGS        = -g -Wall -g $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS)
 override LDFLAGS       = -Wl,-Map,$(PRG).map
 OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
@@ -76,6 +76,6 @@ pdf: $(PRG).pdf
 %.png: %.fig
 	$(FIG2DEV) -L png $< $@
 flash:
-	sudo systemctl stop check-pwr.timer
+	sudo systemctl stop spi.service
 	sudo avrdude -c linuxspi -p m328p -P /dev/spidev0.0 -b 100000 -U flash:w:$(PRG).hex -U lfuse:w:0xD2:m -U hfuse:w:0xd9:m -U efuse:w:0xff:m
-	sudo systemctl start check-pwr.timer
+#	sudo systemctl start spi.service

@@ -13,11 +13,41 @@
 
 #define F_CPU 8000000L
 
-#define J1850_MSG_BUF_SIZE 16
-#define J1850_BUSSES 2
+#define J1850_MSG_BUF_SIZE 32
+
+//J1850_OUT
+#define J1850_BUS0_PORT_REG PORTD
+#define J1850_BUS0_DDRPORT_REG DDRD
+#define J1850_BUS0_PORT_MSK (1<<PORTD6)
+#define J1850_BUS0_PIN_REG PIND
+#define J1850_BUS0_DDRPIN_REG DDRD
+#define J1850_BUS0_PIN_MSK (1<<PORTD3)
+#define J1850_BUS0_PCINT_REG PCMSK2
+#define J1850_BUS0_PCINT_MSK (1<<PCINT19)
+#define J1850_BUS0_OCR_REG OCR2A
+#define J1850_BUS0_OCF_REG TIFR2
+#define J1850_BUS0_OCF_MSK (1<<OCF2A)
+#define J1850_BUS0_OCIE_REG TIMSK2
+#define J1850_BUS0_OCIE_MSK (1<<OCIE2A)
+
+//J1850_IN
+#define J1850_BUS1_PORT_REG PORTB
+#define J1850_BUS1_DDRPORT_REG DDRB
+#define J1850_BUS1_PORT_MSK (1<<PORTB1)
+#define J1850_BUS1_PIN_REG PIND
+#define J1850_BUS1_DDRPIN_REG DDRD
+#define J1850_BUS1_PIN_MSK (1<<PORTD2)
+#define J1850_BUS1_PCINT_REG PCMSK2
+#define J1850_BUS1_PCINT_MSK (1<<PCINT18)
+#define J1850_BUS1_OCR_REG OCR2B
+#define J1850_BUS1_OCF_REG TIFR2
+#define J1850_BUS1_OCF_MSK (1<<OCF2B)
+#define J1850_BUS1_OCIE_REG TIMSK2
+#define J1850_BUS1_OCIE_MSK (1<<OCIE2B)
 
 typedef struct j1850_bus_t j1850_bus_t;
 typedef struct j1850_msg_buf_t j1850_msg_buf_t;
+typedef struct j1850_event_t j1850_event_t;
 
 struct j1850_msg_buf_t {
 	uint8_t buf[12];
@@ -27,14 +57,6 @@ struct j1850_msg_buf_t {
 };
 
 struct j1850_bus_t {
-	volatile uint8_t *port_reg;
-	uint8_t port_msk;
-	volatile uint8_t *pin_reg;
-	uint8_t pin_msk;
-	volatile uint8_t *ddrpin_reg;
-	volatile uint8_t *ddrport_reg;
-	volatile uint8_t *pcint_reg;
-	uint8_t pcint_msk;
 	uint8_t last_pin;
 	uint8_t state;
 	uint8_t ltmr;
@@ -47,40 +69,15 @@ struct j1850_bus_t {
 	uint8_t tx_msg_end;
 };
 
-volatile j1850_bus_t j1850_bus[J1850_BUSSES];
-// 0 - J1850 IN - ACC
-// 1 - J1850 OUT - RADIO
-
-volatile uint8_t j1850_wire_mode;
-
-/*
-volatile uint8_t j1850_state[2];
-// 0 - Idle
-// 1 - SOF?
-// 2 - Received SOF, receiving bits
-//10 - Output?
-
-volatile uint8_t j1850_ltmr[2];
-volatile uint8_t j1850_new_msg[2];
-volatile uint8_t j1850_rx_buf[2][12];
-volatile uint8_t j1850_rx_bytes[2];
-volatile uint8_t j1850_rx_byte[2];
-volatile uint8_t j1850_rx_bit[2];
-
-volatile uint8_t j1850_tx_buf[2][12];
-volatile uint8_t j1850_tx_bytes[2];
-volatile uint8_t j1850_tx_byte[2];
-volatile uint8_t j1850_tx_bit[2];
-*/
-
-volatile uint8_t j1850_last_pin;
+volatile j1850_bus_t j1850_bus[2];
 
 void j1850_init(void);
 void j1850_send_packet(uint8_t bus);
 uint8_t j1850_crc(uint8_t *msg_buf, int8_t nbytes);
 
 // convert microseconds to counter values
-#define us2cnt(us) ((unsigned int)((unsigned long)(us) / ((1000000L*32L) / (float)((unsigned long)F_CPU / 1L))))
+#define ISR_LATENCY 10
+#define us2cnt(us) ((unsigned int)(((unsigned long)(us)) / ((1000000L*32L) / (float)((unsigned long)F_CPU / 1L))))
 
 // define J1850 VPW timing requirements in accordance with SAE J1850 standard
 // all pulse width times in us

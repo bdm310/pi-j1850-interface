@@ -1,0 +1,21 @@
+Main Bus:
+No traffic when off
+	Radio:
+	8D 0F    00 CRC				- General status - broadcast about once every second
+	      00					- Initial startup
+	      01					- Internal CD, Off
+	      20					- AM
+	      21					- FM
+	      24					- External CD
+	      26					- Satellite
+	      
+	80       CRC				- Time broadcast - broadcast on change
+	   HH						- BCD Hours
+	      MM					- BCD Minutes
+	
+	CD Changer:
+	
+	Satellite:
+	8D 22 10 00 01 CRC			- Alive - broadcast about once every second on main bus
+	8D 22 11 01    CRC			- Satellite on - broadcast about once every second on main and secondary bus
+	            NN				- Channel, 1 to 255 (0 displays as 1)

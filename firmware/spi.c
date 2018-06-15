@@ -6,18 +6,6 @@
 #include "j1850.h"
 
 void spi_init_slave(void) {
-    //Initialize ring buffers
-    uint8_t i;
-    for(i=0; i<2; i++) {
-		rx_buf[i].start = 0;
-		rx_buf[i].end   = rx_buf[i].start;
-		tx_buf[i].start = 0;
-		tx_buf[i].end   = tx_buf[i].start;
-		
-		rx_buf[i].buffer[0] = 0;
-		tx_buf[i].buffer[0] = 0;
-	}
-	
     DDRB |= (1<<PINB4);               //MISO as OUTPUT
     SPCR = (1<<SPE) | (1<<SPIE);       //Enable SPI && interrupt enable bit
     SPDR = 0;
@@ -27,6 +15,7 @@ ISR(SPI_STC_vect) {
 	uint8_t byte;
     uint8_t rec_byte = SPDR;
     last_spi_byte_tmr = timer_10ms;
+    spi_active = 1;
 
 	switch(spi_status) {
 		case 0x00: //Received a byte while idle
@@ -65,17 +54,17 @@ ISR(SPI_STC_vect) {
 			if(spi_bytes) spi_status = 0x11;
 			else spi_status = 0x00;
 			break;
-		case 0x05: //Prepare to receive J1850 0 message
+		case 0x05: //Prepare to receive J1850 message 0
 			spi_bytes = SPDR;
 			spi_status = 0x12;
 			break;
-		case 0x06: //Prepare to receive J1850 1 message
+		case 0x06: //Prepare to receive J1850 message 1
 			spi_bytes = SPDR;
 			spi_status = 0x13;
 			break;
 		case 0x10: //Read out J1850 buffer 0
 			byte = j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].bytes - spi_bytes;
-			SPDR = j1850_bus[0].rx_buf[ j1850_bus[0].rx_msg_start ].buf[byte];
+			SPDR = j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[byte];
 			spi_bytes --;
 			if(spi_bytes == 0) {
 				j1850_bus[0].rx_msg_start++;
@@ -85,7 +74,7 @@ ISR(SPI_STC_vect) {
 			break;
 		case 0x11: //Read out J1850 buffer 1
 			byte = j1850_bus[1].rx_buf[j1850_bus[1].rx_msg_start].bytes - spi_bytes;
-			SPDR = j1850_bus[1].rx_buf[ j1850_bus[1].rx_msg_start ].buf[byte];
+			SPDR = j1850_bus[1].rx_buf[j1850_bus[1].rx_msg_start].buf[byte];
 			spi_bytes --;
 			if(spi_bytes == 0) {
 				j1850_bus[1].rx_msg_start++;
@@ -93,7 +82,7 @@ ISR(SPI_STC_vect) {
 				spi_status = 0xFF;
 			}
 			break;
-		case 0x12: //Receive J1850 0 message
+		case 0x12: //Receive J1850 message 0
 			j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].bytes] = SPDR;
 			j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].bytes++;
 			spi_bytes--;
@@ -103,7 +92,7 @@ ISR(SPI_STC_vect) {
 				spi_status = 0xFF;
 			}
 			break;
-		case 0x13: //Receive J1850 1 message
+		case 0x13: //Receive J1850 message 1
 			j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_end].buf[j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_end].bytes] = SPDR;
 			j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_end].bytes++;
 			spi_bytes--;
@@ -119,3 +108,4 @@ ISR(SPI_STC_vect) {
 			break;
 	}
 }
+

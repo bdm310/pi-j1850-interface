@@ -10,12 +10,9 @@
 #include <avr/interrupt.h>
 #include "spi.h"
 #include "main.h"
-#include "ringbuffer.h"
-
-volatile ring_buf_t rx_buf[2];
-volatile ring_buf_t tx_buf[2];	   
 
 volatile uint8_t spi_status;
+volatile uint8_t spi_active;
 
 volatile uint8_t last_spi_byte_tmr;
 volatile uint8_t spi_bytes;

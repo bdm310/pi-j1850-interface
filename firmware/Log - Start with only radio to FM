@@ -1,0 +1,32 @@
+POWER ON:
+	Radio advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S00) MSG:                                     [            ] CRC: 17
+
+Radio ???
+BUS: 0 - HDR: 26 (P 1 HL3 IFR: N ADR: P TP2 T80 S51) MSG: 01 02 61                            [a         ] CRC: C6
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 92                            [��         ] CRC: 7A
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 96                            [��         ] CRC: 0E
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 93                            [��         ] CRC: 67
+BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 81                            [��         ] CRC: 90
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T80 S20) MSG: 00 00                               [          ] CRC: 9E
+
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+Radio ???
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 97                            [��         ] CRC: 13
+BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 82 51                            [�Q         ] CRC: F0
+
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+Radio ???
+BUS: 0 - HDR: 80 (P 4 HL2 IFR: N ADR: F TP0 T06 S--) MSG: 32                                  [2           ] CRC: F4
+BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+
+REPEATS about 1/sec:
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D

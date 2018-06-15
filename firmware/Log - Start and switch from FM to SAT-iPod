@@ -1,0 +1,191 @@
+POWER ON:
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+
+	Radio advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S00) MSG:                                     [            ] CRC: 17
+
+	Radio ???
+	BUS: 0 - HDR: 26 (P 1 HL3 IFR: N ADR: P TP2 T80 S51) MSG: 01 02 61                            [a         ] CRC: C6
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 92                            [��         ] CRC: 7A
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 96                            [��         ] CRC: 0E
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 93                            [��         ] CRC: 67
+	BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 81                            [��         ] CRC: 90
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+
+	Radio related to last ???
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T80 S20) MSG: 00 00                               [          ] CRC: 9E
+
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 97                            [��         ] CRC: 13
+	BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+	BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+	
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+BUS: 0 - HDR: 80 (P 4 HL2 IFR: N ADR: F TP0 T06 S--) MSG: 29                                  [)           ] CRC: F6
+	BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 82 51                            [�Q         ] CRC: F0
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+	BUS: 0 - HDR: AC (P 5 HL3 IFR: N ADR: P TP0 T04 S00) MSG:                                     [            ] CRC: 26
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+REPEATS about 1/sec:
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S21) MSG:                                     [            ] CRC: 8D
+	Sat advertises alive
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S10) MSG: 00 01                               [          ] CRC: F3
+
+PRESSED CD AUX:
+Radio advertises mode (satellite)
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S26) MSG:                                     [            ] CRC: DE
+
+Sat advertises active and channel
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 97                            [��         ] CRC: 13
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 12
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 4A
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 83 2B                            [�+         ] CRC: 37
+BUS: 1 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: 3D (P 1 HL1 IFR: N ADR: P TP1 T-- S--) MSG: 12 80 97                            [��         ] CRC: 13
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T38 S--) MSG: 50 6C 61 79                         [Play        ] CRC: 72
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T20 S--) MSG: 69 6E 67 20                         [ing         ] CRC: 18
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T10 S--) MSG: 69 50 6F 64                         [iPod        ] CRC: 2B
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T29 S--) MSG: 55 6E 6B 6E                         [Unkn        ] CRC: 7A
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T11 S--) MSG: 6F 77 6E 20                         [own         ] CRC: B9
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T2C S--) MSG: 55 6E 6B 6E                         [Unkn        ] CRC: A5
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T14 S--) MSG: 6F 77 6E 20                         [own         ] CRC: 66
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T2D S--) MSG: 55 6E 6B 6E                         [Unkn        ] CRC: CF
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T15 S--) MSG: 6F 77 6E 20                         [own         ] CRC: 0C
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 54
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 0C
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 1 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T59 S--) MSG: 54 68 65 20                         [The         ] CRC: 08
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T41 S--) MSG: 48 65 61 72                         [Hear        ] CRC: 2A
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T31 S--) MSG: 74 20 6F 66                         [t of        ] CRC: 98
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T21 S--) MSG: 20 45 76 65                         [ Eve        ] CRC: D5
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T11 S--) MSG: 72 79 74 68                         [ryth        ] CRC: 57
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T4C S--) MSG: 48 61 6E 64                         [Hand        ] CRC: A4
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T34 S--) MSG: 20 6F 66 20                         [ of         ] CRC: 15
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T24 S--) MSG: 53 6F 72 72                         [Sorr        ] CRC: C7
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T14 S--) MSG: 6F 77 20 20                         [ow          ] CRC: 63
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T5D S--) MSG: 57 69 74 68                         [With        ] CRC: 8B
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T28 S--) MSG: 20 20 20 20                         [            ] CRC: C6
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T45 S--) MSG: 69 6E 20 54                         [in T        ] CRC: A7
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T10 S--) MSG: 20 20 20 20                         [            ] CRC: 9E
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T35 S--) MSG: 65 6D 70 74                         [empt        ] CRC: 90
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T29 S--) MSG: 20 20 20 20                         [            ] CRC: AC
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T25 S--) MSG: 61 74 69 6F                         [atio        ] CRC: 0B
+BUS: 0 - HDR: AA (P 5 HL2 IFR: N ADR: F TP2 T11 S--) MSG: 20 20 20 20                         [            ] CRC: F4
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T15 S--) MSG: 6E 20 20 20                         [n           ] CRC: 66
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T2A S--) MSG: 20 20 20 20                         [            ] CRC: 54
+BUS: 1 - HDR: AB (P 5 HL2 IFR: N ADR: F TP3 T12 S--) MSG: 20 20 20 20                         [            ] CRC: 0C
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S26) MSG:                                     [            ] CRC: DE
+BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+
+REPEATS about 1/sec:
+	Radio advertises mode
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T0F S26) MSG:                                     [            ] CRC: DE
+
+	Sat advertises active and channel on both busses
+	BUS: 0 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
+	BUS: 1 - HDR: 8D (P 4 HL3 IFR: N ADR: P TP1 T22 S11) MSG: 01 1A                               [          ] CRC: 32
