@@ -116,13 +116,13 @@ int main(void) {
 				shutdown_tmr = timer_10ms;
 			}
 			else {
-				if(timer_10ms - shutdown_tmr > 20) {
+				if((uint8_t)(timer_10ms - shutdown_tmr) > 20) {
 					PORTD &= ~(1<<PORTD4);
 				}
 			}
 		}
 		cli();
-		if(timer_10ms - last_spi_byte_tmr > 50) {
+		if((uint8_t)(timer_10ms - last_spi_byte_tmr) > 50) {
 			spi_status = 0;
 		}
 		sei();
@@ -166,7 +166,7 @@ int main(void) {
 			}
         }
         */
-        
+        /*
         if(!spi_active) {
 			if(j1850_bus[0].rx_msg_start != j1850_bus[0].rx_msg_end) {
 				if(j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[0] == 0x8D && j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[1] == 0x0F) {
@@ -178,7 +178,7 @@ int main(void) {
 				if(j1850_bus[0].rx_msg_start == J1850_MSG_BUF_SIZE) j1850_bus[0].rx_msg_start = 0;
 			}
 		}
-        
+        */
 		if(cd_status) {
 			switch( cd_status ){
 				case 1:

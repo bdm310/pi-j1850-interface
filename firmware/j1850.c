@@ -66,6 +66,23 @@ ISR(PCINT2_vect) {
 					j1850_bus[0].state = 0;
 				}
 			}
+			else if(state == 10) {
+				//Trying to initiate a transmission, do nothing
+			}
+			else if(state == 11) {
+				//Pin changed while we were waiting for IFS, reset timer
+				J1850_BUS0_OCR_REG = tmr_cnt + TX_IFS;
+				J1850_BUS0_OCF_REG |= J1850_BUS0_OCF_MSK;
+				J1850_BUS0_OCIE_REG |= J1850_BUS0_OCIE_MSK;
+			}
+			else if(state == 12) {
+				//Sending bits, check that we're not getting overridden
+				if(!(bus_pin[0]) != !(J1850_BUS0_PORT_REG & J1850_BUS0_PORT_MSK)) {
+					J1850_BUS0_OCIE_REG &= ~J1850_BUS0_OCIE_MSK;
+					J1850_BUS0_PORT_REG &= ~J1850_BUS0_PORT_MSK;
+					j1850_bus[0].state = 0;
+				} 
+			}
 		}
 	}
 	
@@ -123,6 +140,23 @@ ISR(PCINT2_vect) {
 					j1850_bus[1].state = 0;
 				}
 			}
+			else if(state == 10) {
+				//Trying to initiate a transmission, do nothing
+			}
+			else if(state == 11) {
+				//Pin changed while we were waiting for IFS, reset timer
+				J1850_BUS1_OCR_REG = tmr_cnt + TX_IFS;
+				J1850_BUS1_OCF_REG |= J1850_BUS1_OCF_MSK;
+				J1850_BUS1_OCIE_REG |= J1850_BUS1_OCIE_MSK;
+			}
+			else if(state == 12) {
+				//Sending bits, check that we're not getting overridden
+				if(!(bus_pin[1]) != !(J1850_BUS1_PORT_REG & J1850_BUS1_PORT_MSK)) {
+					J1850_BUS1_OCIE_REG &= ~J1850_BUS1_OCIE_MSK;
+					J1850_BUS1_PORT_REG &= ~J1850_BUS1_PORT_MSK;
+					j1850_bus[1].state = 0;
+				} 
+			}
 		}
 	}
 }
@@ -179,8 +213,7 @@ ISR(TIMER2_COMPA_vect) {
 		uint8_t pin;
 		pin = J1850_BUS0_PIN_REG & J1850_BUS0_PIN_MSK;
 		
-		if(pin) J1850_BUS0_PORT_REG &= ~J1850_BUS0_PORT_MSK;
-		else J1850_BUS0_PORT_REG |= J1850_BUS0_PORT_MSK;
+		J1850_BUS0_PORT_REG ^= J1850_BUS0_PORT_MSK;
 		
 		if(j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_start].bit_ptr) j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_start].bit_ptr --;
 		else if(j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_start].bytes) {
@@ -260,8 +293,7 @@ ISR(TIMER2_COMPB_vect) {
 		uint8_t pin;
 		pin = J1850_BUS1_PIN_REG & J1850_BUS1_PIN_MSK;
 		
-		if(pin) J1850_BUS1_PORT_REG &= ~J1850_BUS1_PORT_MSK;
-		else J1850_BUS1_PORT_REG |= J1850_BUS1_PORT_MSK;
+		J1850_BUS1_PORT_REG ^= J1850_BUS1_PORT_MSK;
 		
 		if(j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_start].bit_ptr) j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_start].bit_ptr --;
 		else if(j1850_bus[1].tx_buf[j1850_bus[1].tx_msg_start].bytes) {

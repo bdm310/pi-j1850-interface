@@ -1,5 +1,6 @@
 Main Bus:
 No traffic when off
+
 	Radio:
 	8D 0F    00 CRC				- General status - broadcast about once every second
 	      00					- Initial startup
@@ -16,6 +17,25 @@ No traffic when off
 	CD Changer:
 	
 	Satellite:
-	8D 22 10 00 01 CRC			- Alive - broadcast about once every second on main bus
-	8D 22 11 01    CRC			- Satellite on - broadcast about once every second on main and secondary bus
+	8D 22 10 00 01 CRC			- Alive - broadcast about once every second
+	8D 22 11 01    CRC			- Satellite on - broadcast about once every second
 	            NN				- Channel, 1 to 255 (0 displays as 1)
+
+Second Bus (labelled "Spare" generally on accessory connector):
+No traffic when off
+
+	Satellite:
+	8D 22 11 01    CRC			- Satellite on - broadcast about once every second
+	            NN				- Channel, 1 to 255 (0 displays as 1)
+	AB                CRC		- Set first four characters of Channel Display
+	   AA						- Address of buffer - ends at 0x10 and increments by 0x10 for more towards the start of the string
+								  Add to address to access specific areas:
+								  0x00 - Top most line - 20 characters on RB1
+								  0x01 - Second line - 18 characters on RB1
+								  0x02 - Green line same height as second line above, following that line - 8 characters on RB1
+								  0x03 - ? no result on screen of RB1
+								  0x04 - Song - 36 characters on RB1
+								  0x05 - Artist - 36 characters on RB1
+								  
+								  Add 0x08 to resulting AA from above to denote start of string
+	      DD DD DD DD			- ASCII text
