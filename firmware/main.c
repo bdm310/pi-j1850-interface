@@ -6,27 +6,22 @@
 #include <stdint.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+#include <avr/wdt.h>
 #include "spi.h"
 #include "main.h"
 #include "j1850.h"
-
-FUSES = 
-{
-    .low = LFUSE_DEFAULT | FUSE_CKDIV8,
-    .high = HFUSE_DEFAULT,
-    .extended = EFUSE_DEFAULT,
-};
 
 
 ISR(TIMER0_COMPA_vect) {
     timer_10ms ++;
     cnt_10ms ++;
-
+	
     if(cnt_10ms == 100) {
 		cnt_10ms = 0;
 		timer_1s ++;
 	}
 }
+
 
 ISR(ADC_vect) {
     uint8_t res = ADCH;
@@ -47,16 +42,18 @@ ISR(ADC_vect) {
 
 }
 
+
 void timer_10ms_init(void) {
     //Select CTC mode
     TCCR0A = 0b00000010;
     //Select x1024 prescalar for TC0
     TCCR0B = 0b00000101;
-    //Set a 10ms timeout
+    //Set a 10ms timeout 78
     OCR0A = 78;
     //Enable OC0A interrupt
     TIMSK0 = 0b00000010;
 }
+
 
 void io_init(void) {
     DDRD |= (1<<PORTD4);
@@ -96,15 +93,25 @@ int main(void) {
 	uint8_t waiting = 1;
 	uint8_t shutdown_tmr = 0;
 	uint8_t cd_status = 0;
-
+	uint8_t bus;
+	
+	//Reset and turn off WDT
+	wdt_reset();
+    MCUSR &= ~(1<<WDRF);
+    WDTCSR |= (1<<WDCE) | (1<<WDE);
+    WDTCSR = 0x00;
+	
     timer_10ms_init();
     ad_init();
     io_init();
     
     j1850_init();
+    j1850_listen_bytes = 1;
+    j1850_listen_headers[0] = 0x8D;
+    
     spi_active = 0;
     spi_init_slave();                             //Initialize slave SPI
-
+	
     sei();
     
     for (;;)
@@ -128,7 +135,6 @@ int main(void) {
 		sei();
 		
 		cli();
-		uint8_t bus;
 		for(bus=0; bus<2; bus++) {
 			if((j1850_bus[bus].tx_msg_start != j1850_bus[bus].tx_msg_end) && j1850_bus[bus].state == 0) {
 				j1850_send_packet(bus);
@@ -136,49 +142,55 @@ int main(void) {
 		}
 		sei();
 		
-		/*
-		if(sw_new) {
-            sw_new = 0;
-            read_sw_state();
-            
-            if(lsw_state ^ sw_state) {
-				lsw_state = sw_state;
-				switch(sw_state) {
-					case 0x00:
-						cd_status = 100;
-						break;
-					case 0x01:
-						cd_status = 101;
-						break;
-					case 0x02:
-						cd_status = 102;
-						break;
-					case 0x03:
-						cd_status = 103;
-						break;
-					case 0x04:
-						cd_status = 104;
-						break;
-					case 0x05:
-						cd_status = 105;
-						break;
+		for(bus=0; bus<2; bus++) {
+			volatile j1850_bus_t *j1850 = &j1850_bus[bus];
+			if(j1850->rx_msg_start != j1850->rx_msg_end) {
+				volatile j1850_msg_buf_t *msg = &j1850->rx_buf[j1850->rx_msg_start];
+				
+				uint8_t match = 0;
+				uint8_t i;
+				if(j1850_listen_bytes) {
+					for(i=0; i<j1850_listen_bytes; i++) {
+						if(msg->buf[0] == j1850_listen_headers[i]) {
+							match = 1;
+							break;
+						}
+					}
 				}
-			}
-        }
-        */
-        /*
-        if(!spi_active) {
-			if(j1850_bus[0].rx_msg_start != j1850_bus[0].rx_msg_end) {
-				if(j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[0] == 0x8D && j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[1] == 0x0F) {
-					if(j1850_bus[0].rx_buf[j1850_bus[0].rx_msg_start].buf[2] == 0x26) cd_status = 2;
-					else cd_status = 1;
+				else match = 1;
+				
+				if(match) {
+					volatile j1850_msg_buf_t *rxmsg;
+					if(bus) rxmsg = &bus1_rx[bus1_rx_end];
+					else rxmsg = &bus0_rx[bus0_rx_end];
+					
+					//If the daemon isn't up yet, pretend to be a satellite module
+					if(bus == 0 && !spi_active) {
+						if(msg->buf[0] == 0x8D && msg->buf[1] == 0x0F) {
+							if(msg->buf[2] == 0x26) cd_status = 2;
+							else cd_status = 1;
+						}
+					}
+					
+					*rxmsg = *msg;
+					
+					cli();
+					if(bus) {
+						bus1_rx_end = bus1_rx_end + 1;;
+						if(bus1_rx_end == J1850_MSG_BUF_SIZE) bus1_rx_end = 0;
+					}
+					else {
+						bus0_rx_end = bus0_rx_end + 1;;
+						if(bus0_rx_end == J1850_MSG_BUF_SIZE) bus0_rx_end = 0;
+					}
+					sei();
 				}
 				
-				j1850_bus[0].rx_msg_start ++;
-				if(j1850_bus[0].rx_msg_start == J1850_MSG_BUF_SIZE) j1850_bus[0].rx_msg_start = 0;
+				j1850->rx_msg_start ++;
+				if(j1850->rx_msg_start == J1850_MSG_BUF_SIZE) j1850->rx_msg_start = 0;
 			}
 		}
-        */
+        
 		if(cd_status) {
 			switch( cd_status ){
 				case 1:
@@ -209,165 +221,12 @@ int main(void) {
 					sei();
 					cd_status = 0;
 					break;
-				/*
-				case 1:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x8D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x93;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x01;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x01;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = 0x80;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 0;
-					break;
-				case 2:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x8D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x92;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0xC0;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 5);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 6;
-					break;
-				case 3:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x8D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x92;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0xE1;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x01;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = 0x03;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 5);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 7;
-					break;
-				case 4:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x8D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x93;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x01;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x01;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = 0x80;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 5);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 0;
-					break;
-				case 5:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x8D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x94;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 0;
-					break;
-				case 6:
-					if(j1850_bus.state == 0) cd_status = 3;
-					break;
-				case 7:
-					if(j1850_bus.state == 0) cd_status = 4;
-					break;
-				case 100:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				case 101:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x02;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				case 102:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x10;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				case 103:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x02;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				case 104:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x04;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				case 105:
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0] = 0x3D;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[1] = 0x11;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[2] = 0x10;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[3] = 0x00;
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[4] = j1850_crc((uint8_t *)&j1850_bus.tx_buf[j1850_bus.tx_msg_end].buf[0], 4);
-					j1850_bus.tx_buf[j1850_bus.tx_msg_end].bytes = 5;
-					cli();
-					j1850_bus.tx_msg_end++;
-					if(j1850_bus.tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus.tx_msg_end = 0;
-					sei();
-					cd_status = 120;
-					break;
-				*/
-				case 120:
-					if(j1850_bus[0].state == 0) cd_status = 0;
-					break;
 			}
+		}
+		
+		if(sw_new) {
+			sw_new = 0;
+			read_sw_state();
 		}
     }
     return (0);

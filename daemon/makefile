@@ -1,24 +1,21 @@
 TARGET = spi
+DEST = ./build
 LIBS = 
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -Wall
+LDFLAGS = -Wl,-Map,$(DEST)/$(PRG).map
 
-.PHONY: default all clean
-
-default: $(TARGET)
+default: $(DEST)/$(TARGET)
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c))
+OBJECTS = $(patsubst %.c,%.o,$(wildcard *.c))
 HEADERS = $(wildcard *.h)
 
-%.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(DEST)/%.o: %.c $(HEADERS)
+	$(CC) -o $@ $(CFLAGS) -c $< `pkg-config --cflags dbus-1` `pkg-config --libs dbus-1`
 
-.PRECIOUS: $(TARGET) $(OBJECTS)
-
-$(TARGET): $(OBJECTS)
-	$(CC) $(OBJECTS) -Wall $(LIBS) -o $@
+$(DEST)/$(TARGET): $(DEST)/$(OBJECTS)
+	$(CC) $(DEST)/$(OBJECTS) $(LDFLAGS) -o $@ `pkg-config --cflags dbus-1` `pkg-config --libs dbus-1`
 
 clean:
-	-rm -f *.o
-	-rm -f $(TARGET)
+	-rm -rf $(DEST)/*

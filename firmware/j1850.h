@@ -9,11 +9,10 @@
 #include <avr/interrupt.h>
 #include "main.h"
 #include "j1850.h"
-#include "spi.h"
 
 #define F_CPU 8000000L
 
-#define J1850_MSG_BUF_SIZE 32
+#define J1850_MSG_BUF_SIZE 16
 
 //J1850_OUT
 #define J1850_BUS0_PORT_REG PORTD
@@ -70,6 +69,9 @@ struct j1850_bus_t {
 };
 
 volatile j1850_bus_t j1850_bus[2];
+
+volatile uint8_t j1850_listen_headers[16];
+volatile uint8_t j1850_listen_bytes;
 
 void j1850_init(void);
 void j1850_send_packet(uint8_t bus);

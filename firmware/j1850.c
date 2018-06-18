@@ -252,8 +252,14 @@ ISR(TIMER2_COMPB_vect) {
 		//Received EOD
 		J1850_BUS1_OCIE_REG &= ~J1850_BUS1_OCIE_MSK;
 		j1850_bus[1].new_msg = 1;
+		
+		uint8_t prev_end = j1850_bus[1].rx_msg_end;
 		j1850_bus[1].rx_msg_end++;
 		if(j1850_bus[1].rx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus[1].rx_msg_end = 0;
+		
+		//Buffer overflow
+		if(j1850_bus[1].rx_msg_end == j1850_bus[1].rx_msg_start) j1850_bus[1].rx_msg_end = prev_end;
+		
 		j1850_bus[1].state = 0;
 	}
 	else if(j1850_bus[1].state == 10) {
@@ -379,6 +385,8 @@ uint8_t j1850_crc(uint8_t *msg_buf, int8_t nbytes) {
  * Initialize all the J1850 stuff
  */
 void j1850_init(void) {
+	j1850_listen_bytes = 0;
+	
 	J1850_BUS0_DDRPORT_REG |= J1850_BUS0_PORT_MSK;
 	J1850_BUS0_DDRPIN_REG &= ~J1850_BUS0_PIN_MSK;
 	J1850_BUS0_PCINT_REG |= J1850_BUS0_PCINT_MSK;

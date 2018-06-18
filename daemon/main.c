@@ -38,8 +38,8 @@ static void pabort(const char *s)
 static const char *device = "/dev/spidev0.0";
 static uint8_t mode = 0;
 static uint8_t bits = 8;
-static uint32_t speed = 10000;
-static uint16_t delay;
+static uint32_t speed = 100000;
+static uint16_t delay = 0;
 int fd2;
 int state;
 
@@ -345,6 +345,33 @@ static int send_info(int fd, char *text, uint8_t field) {
 	return 0;
 }
 
+int get_switches(int fd) {
+	uint8_t msg[] = {0x01, 0x00};
+	
+	uint8_t i;
+	uint8_t ret;
+	for(i=0; i<sizeof(msg)+1; i++) ret = xferbyte(fd, msg[i]);
+	
+	return (int)ret;
+}
+
+void set_listen_headers(int fd, uint8_t *headers) {
+	uint8_t msg[18] = {0};
+	int nheaders = 0;
+	
+	msg[0] = 0x07;
+	
+	while(headers[nheaders] != 0) {
+		msg[2+nheaders] = headers[nheaders];
+		nheaders++;
+	}
+	
+	msg[1] = nheaders;
+	
+	uint8_t i;
+	for(i=0; i<(nheaders+3); i++) xferbyte(fd, msg[i]);
+}
+
 uint8_t j1850_crc(uint8_t *msg_buf, int8_t nbytes) {
 	uint8_t crc_reg=0xff,poly,byte_count,bit_count;
 	uint8_t *byte_point;
@@ -390,7 +417,7 @@ static uint8_t xferbyte(int fd, uint8_t outbyte) {
 	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
 	if (ret == -1)
 		pabort("can't send spi message");
-	
+		
 	return rx[0];
 }
 
@@ -400,6 +427,7 @@ static int checkpwr(int fd)
 	
 	pin = xferbyte(fd, 0x02);
 	pin = xferbyte(fd, 0x00);
+	if(pin != 0x02) return -1;
 	pin = xferbyte(fd, 0x00);
 
 	return pin & 1;
@@ -409,89 +437,10 @@ void sig_handler(int sig) {
 	if(sig == SIGINT) state = 0xFF;
 }
 
-void print_usage(const char *prog)
-{
-	printf("Usage: %s [-DsbdlHOLC3]\n", prog);
-	puts("  -D --device   device to use (default /dev/spidev0.0)\n"
-	     "  -s --speed    max speed (Hz)\n"
-	     "  -d --delay    delay (usec)\n"
-	     "  -b --bpw      bits per word \n"
-	     "  -l --loop     loopback\n"
-	     "  -H --cpha     clock phase\n"
-	     "  -O --cpol     clock polarity\n"
-	     "  -L --lsb      least significant bit first\n"
-	     "  -C --cs-high  chip select active high\n"
-	     "  -3 --3wire    SI/SO signals shared\n");
-	exit(1);
-}
-
-void parse_opts(int argc, char *argv[])
-{
-	while (1) {
-		static const struct option lopts[] = {
-			{ "device",  1, 0, 'D' },
-			{ "speed",   1, 0, 's' },
-			{ "delay",   1, 0, 'd' },
-			{ "bpw",     1, 0, 'b' },
-			{ "loop",    0, 0, 'l' },
-			{ "cpha",    0, 0, 'H' },
-			{ "cpol",    0, 0, 'O' },
-			{ "lsb",     0, 0, 'L' },
-			{ "cs-high", 0, 0, 'C' },
-			{ "3wire",   0, 0, '3' },
-			{ NULL, 0, 0, 0 },
-		};
-		int c;
-
-		c = getopt_long(argc, argv, "D:s:d:b:lHOLC3", lopts, NULL);
-
-		if (c == -1)
-			break;
-
-		switch (c) {
-		case 'D':
-			device = optarg;
-			break;
-		case 's':
-			speed = atoi(optarg);
-			break;
-		case 'd':
-			delay = atoi(optarg);
-			break;
-		case 'b':
-			bits = atoi(optarg);
-			break;
-		case 'l':
-			mode |= SPI_LOOP;
-			break;
-		case 'H':
-			mode |= SPI_CPHA;
-			break;
-		case 'O':
-			mode |= SPI_CPOL;
-			break;
-		case 'L':
-			mode |= SPI_LSB_FIRST;
-			break;
-		case 'C':
-			mode |= SPI_CS_HIGH;
-			break;
-		case '3':
-			mode |= SPI_3WIRE;
-			break;
-		default:
-			print_usage(argv[0]);
-			break;
-		}
-	}
-}
-
 int main(int argc, char *argv[])
 {
 	int ret = 0;
 	int fd = -1;
-
-	parse_opts(argc, argv);
 
 	while(fd < 0) {
 		fd = open(device, O_RDWR);
@@ -500,43 +449,33 @@ int main(int argc, char *argv[])
 			usleep(500000);
 		}
 	}
-
+	
 	/*
 	 * spi mode
 	 */
 	ret = ioctl(fd, SPI_IOC_WR_MODE, &mode);
-	if (ret == -1)
-		pabort("can't set spi mode");
+	if (ret == -1) pabort("can't set spi mode");
 
 	ret = ioctl(fd, SPI_IOC_RD_MODE, &mode);
-	if (ret == -1)
-		pabort("can't get spi mode");
+	if (ret == -1) pabort("can't get spi mode");
 
 	/*
 	 * bits per word
 	 */
 	ret = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
-	if (ret == -1)
-		pabort("can't set bits per word");
+	if (ret == -1) pabort("can't set bits per word");
 
 	ret = ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
-	if (ret == -1)
-		pabort("can't get bits per word");
+	if (ret == -1) pabort("can't get bits per word");
 
 	/*
 	 * max speed hz
 	 */
 	ret = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
-	if (ret == -1)
-		pabort("can't set max speed hz");
+	if (ret == -1) pabort("can't set max speed hz");
 
 	ret = ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
-	if (ret == -1)
-		pabort("can't get max speed hz");
-
-	printf("spi mode: %d\n", mode);
-	printf("bits per word: %d\n", bits);
-	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
+	if (ret == -1) pabort("can't get max speed hz");
 	
 	signal(SIGINT, sig_handler);
 	
@@ -555,7 +494,12 @@ int main(int argc, char *argv[])
     
 	dbus_play(connection);
 	
+//	uint8_t headers[] = {0x8D, 0x80, 0x3D, 0x00};
+	uint8_t headers[] = {0x00};
+	set_listen_headers(fd, headers);
+	
 	int info_tmr = 0;
+	int last_sw = 0;
 	
 	state = 0;
 	while(1) {
@@ -696,10 +640,11 @@ int main(int argc, char *argv[])
 			fflush(stdout);
 		}
 		
+#ifndef PRINT_MSG
 		if(state) {
 			if(info_tmr > 20) {
 				info_tmr = 0;
-				
+				/*
 				char *song = NULL;
 				dbus_error_init(&error);
 				get_track_parameter(connection, "org.bluez",
@@ -732,23 +677,71 @@ int main(int argc, char *argv[])
 				//if(dbus_error_is_set(&error)) printf("%s", error.message);
 				
 				if(artist) send_info(fd, artist, 0x05);
-				
-				send_info(fd, "Album:", 0x00);
+				*/
+				send_info(fd, "Playing Bluetooth", 0x00);
 				send_info(fd, "", 0x02);
 			}
 		}
 		
-		if(checkpwr(fd)) {
-			if( access( "/home/pi/spi/pwroff", F_OK ) != -1 ) {
-				remove("/home/pi/spi/pwroff");
+		int sw = get_switches(fd);
+		/*
+		if(sw != last_sw) {
+			last_sw = sw;
+			uint8_t msg[8];
+			msg[0] = 0x05;
+			msg[1] = 0x05;
+			msg[2] = 0x3D;
+			msg[3] = 0x11;
+			msg[4] = 0x00;
+			msg[5] = 0x00;
+			msg[7] = 0x00;
+			switch(sw & 0x0F) {
+				case 0x01:
+					msg[4] = 0x00;
+					msg[5] = 0x02;
+					break;
+				case 0x02:
+					msg[4] = 0x20;
+					msg[5] = 0x00;
+					break;
+				case 0x03:
+					msg[4] = 0x40;
+					msg[5] = 0x00;
+					break;
+				case 0x04:
+					msg[4] = 0x10;
+					msg[5] = 0x00;
+					break;
+				case 0x05:
+					msg[4] = 0x20;
+					msg[5] = 0x00;
+					break;
+			}
+			msg[6] = j1850_crc(&msg[2], 5);
+			msg[7] = 0x00;
+			uint8_t i;
+			for(i=0; i<8; i++) {
+				xferbyte(fd, msg[i]);
+				printf("%.2X ", msg[i]);
+			}
+			printf("\n");
+		}
+		*/
+		
+		ret = checkpwr(fd);
+		if(ret < 0) printf("Error checking power pin status\n");
+		else if(ret) {
+			if( access( "/home/pi/pwroff", F_OK ) != -1 ) {
+				remove("/home/pi/pwroff");
 			}
 		}
 		else {
-			if( access( "/home/pi/spi/pwroff", F_OK ) == -1 ) {
-				fd2 = open("/home/pi/spi/pwroff", O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
+			if( access( "/home/pi/pwroff", F_OK ) == -1 ) {
+				fd2 = open("/home/pi/pwroff", O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
 			}
 		}
-		
+#endif
+
 		if(state == 0xFF) {
 			printf("\n\rQuitting...\n\r");
 			break;
@@ -763,8 +756,8 @@ int main(int argc, char *argv[])
 	
 	dbus_connection_unref(connection);
 
-	if( access( "/home/pi/spi/pwroff", F_OK ) != -1 ) {
-		remove("/home/pi/spi/pwroff");
+	if( access( "/home/pi/pwroff", F_OK ) != -1 ) {
+		remove("/home/pi/pwroff");
 	}
 
 	return ret;
