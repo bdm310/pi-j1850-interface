@@ -1,65 +1,69 @@
 Main Bus:
 No traffic when off
 
-	Radio:
-		8D 0F SS 00 CRC				- General status - broadcast about once every second
-			  00					- Initial startup
-			  01					- Internal CD, Off
-			  20					- AM
-			  21					- FM
-			  24					- External CD
-			  26					- Satellite
-			  
-		80 HH MM CRC				- Time broadcast - broadcast on change
-		   HH						- BCD Hours
-			  MM					- BCD Minutes
-		
-		3D 12 83 KK	CRC				- Radio button press
-				 23					- Tune+ Down
-				 24					- Tune- Down
-				 25					- Tune* Up
-				 26					- Seek+ Down
-				 27					- Seek- Down
-		
-		3D 10 KK 10 CRC				- Radio button press
-			  10  					- Preset 1/Disc +
-			  20  					- Preset 2
-			  30  					- Preset 3
-			  40  					- Preset 4/RND
-			  50  					- Preset 5/Disc -
-	
-	Body Control Module:
-		3D 11 KK KK CRC				- Steering wheel button press
-		      00 00					- * up
-		      00 02					- Mode down
-		      02 00					- Vol- down
-		      04 00					- Vol+ down
-		      10 00					- Seek- down
-		      20 00					- Seek+ down
-	
-	CD Changer:
-		
-	Satellite:
-		8D 22 10 00 01 CRC			- Alive - broadcast about once every second
-		
-		8D 22 11 01 NN CRC			- Satellite on - broadcast about once every second
-					NN				- Channel, 1 to 255 (0 displays as 1)
+    Radio:
+        8D 0F SS 00 CRC             - General status - broadcast about once every second
+              00                    - Initial startup
+              01                    - Internal CD, Off
+              20                    - AM
+              21                    - FM
+              24                    - External CD
+              26                    - Satellite
+              
+        80 HH MM CRC                - Time broadcast - broadcast on change
+           HH                       - BCD Hours
+              MM                    - BCD Minutes
+        
+        3D 12 83 KK CRC             - Radio button press
+                 23                 - Tune+ Down
+                 24                 - Tune- Down
+                 25                 - Tune* Up
+                 26                 - Seek+ Down
+                 27                 - Seek- Down
+        
+        3D 12 80 97 13              - Maybe something to do with shuffle active
+        3D 12 83 2B 37              
+        3D 12 80 97 13              
+
+        3D 10 KK 10 CRC             - Radio button press
+              10                    - Preset 1/Disc +
+              20                    - Preset 2
+              30                    - Preset 3
+              40                    - Preset 4/RND
+              50                    - Preset 5/Disc -
+    
+    Body Control Module:
+        3D 11 KK KK CRC             - Steering wheel button press
+              00 00                 - * up
+              00 02                 - Mode down
+              02 00                 - Vol- down
+              04 00                 - Vol+ down
+              10 00                 - Seek- down
+              20 00                 - Seek+ down
+    
+    CD Changer:
+        
+    Satellite:
+        8D 22 10 00 01 CRC          - Alive - broadcast about once every second
+        
+        8D 22 11 01 NN CRC          - Satellite on - broadcast about once every second
+                    NN              - Channel, 1 to 255 (0 displays as 1)
 
 Second Bus (labelled "Spare" generally on accessory connector):
 No traffic when off
 
-	Satellite:
-	8D 22 11 01 NN CRC			- Satellite on - broadcast about once every second
-	            NN				- Channel, 1 to 255 (0 displays as 1)
-	
-	AB AA DD DD DD DD CRC		- Set first four characters of Channel Display
-	   AA						- Address of buffer - ends at 0x10 and increments by 0x10 for more towards the start of the string
-								  Add to address to access specific areas:
-								  0x00 - Top most line - 20 characters on RB1
-								  0x01 - Second line - 18 characters on RB1
-								  0x02 - Green line same height as second line above, following that line - 8 characters on RB1
-								  0x03 - ? no result on screen of RB1
-								  0x04 - Song - 36 characters on RB1
-								  0x05 - Artist - 36 characters on RB1
-								  Add 0x08 to resulting AA from above to denote start of string
-	      DD DD DD DD			- ASCII text
+    Satellite:
+    8D 22 11 01 NN CRC              - Satellite on - broadcast about once every second
+                NN                  - Channel, 1 to 255 (0 displays as 1)
+    
+    AB AA DD DD DD DD CRC           - Set first four characters of Channel Display
+       AA                           - Address of buffer - ends at 0x10 and increments by 0x10 for more towards the start of the string
+                                      Add to address to access specific areas:
+                                      0x00 - Top most line - 20 characters on RB1
+                                      0x01 - Second line - 18 characters on RB1
+                                      0x02 - Green line same height as second line above, following that line - 8 characters on RB1
+                                      0x03 - ? no result on screen of RB1
+                                      0x04 - Song - 36 characters on RB1
+                                      0x05 - Artist - 36 characters on RB1
+                                      Add 0x08 to resulting AA from above to denote start of string
+          DD DD DD DD               - ASCII text

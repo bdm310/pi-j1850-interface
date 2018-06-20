@@ -6,8 +6,8 @@ OPTIMIZE       = -O3
 # You should not have to change anything below here.
 CC             = avr-gcc
 # Override is only needed by avr-lib build system.
-override CFLAGS        = -Wall $(OPTIMIZE) -mmcu=$(MCU_TARGET)
-override LDFLAGS       = -mmcu=$(MCU_TARGET) -Wl,-Map,$(DEST)/$(PRG).map
+override CFLAGS        = -g -Wall $(OPTIMIZE) -mmcu=$(MCU_TARGET)
+override LDFLAGS       = -g -mmcu=$(MCU_TARGET) -Wl,-Map,$(DEST)/$(PRG).map
 OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
 all: $(DEST)/$(PRG).elf lst text fuse

@@ -6,25 +6,16 @@
 #define __SPI_H__
 
 #include <avr/io.h>
-#include <stdint.h>
-#include <avr/interrupt.h>
-#include "spi.h"
-#include "main.h"
-#include "j1850.h"
 
-volatile uint8_t spi_status;
-volatile uint8_t spi_active;
-
-volatile uint8_t last_spi_byte_tmr;
-volatile uint8_t spi_bytes;
-
-volatile j1850_msg_buf_t bus0_rx[J1850_MSG_BUF_SIZE];
-volatile uint8_t bus0_rx_start;
-volatile uint8_t bus0_rx_end;
-volatile j1850_msg_buf_t bus1_rx[J1850_MSG_BUF_SIZE];
-volatile uint8_t bus1_rx_start;
-volatile uint8_t bus1_rx_end;
+uint8_t spi_active;
 
 void spi_init_slave(void);
+void spi_process(uint8_t tmr_10ms);
+inline int8_t spi_tx_push(uint8_t byte);
+
+#define SPI_BUF_SIZE 65
+
+#define MISO_DDR DDRB 
+#define MISO_MSK (1<<PINB4)
 
 #endif // __SPI_H__

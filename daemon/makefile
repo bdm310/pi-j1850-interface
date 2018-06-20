@@ -2,8 +2,8 @@ TARGET = spi
 DEST = ./build
 LIBS = 
 CC = gcc
-CFLAGS = -Wall
-LDFLAGS = -Wl,-Map,$(DEST)/$(PRG).map
+CFLAGS = -g -Wall
+LDFLAGS = -g -Wl,-Map,$(DEST)/$(PRG).map
 
 default: $(DEST)/$(TARGET)
 all: default

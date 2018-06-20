@@ -1,156 +1,318 @@
 /*
- * SPI testing utility (using spidev driver)
- *
- * Copyright (c) 2007  MontaVista Software, Inc.
- * Copyright (c) 2007  Anton Vorontsov 
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License.
- *
- * Cross-compile with cross-gcc -I/path/to/cross-kernel/include
- *
+ * Daemon for SPI connected AVR
+ * Manages J1850 busses, notifying systemd that it's time to shutdown,
+ * getting bluetooth information, handling switch events, ...
  */
+
+#define _XOPEN_SOURCE 700
 
 #include <stdint.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <getopt.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
 #include <string.h>
 #include <dbus/dbus.h>
 
-//#define PRINT_MSG
-
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-
-static void pabort(const char *s)
-{
-	perror(s);
-	abort();
-}
+#define PWR_FILE_PATH "/home/pi/pwroff"
 
 static const char *device = "/dev/spidev0.0";
 static uint8_t mode = 0;
 static uint8_t bits = 8;
 static uint32_t speed = 100000;
 static uint16_t delay = 0;
-int fd2;
-int state;
+
+static int dbg_level;
+static int listen;
+
+static int state;
+
+static int xferbyte(int fd, int outbyte);
+static int spi_send_data(int fd, int *tx_buf, int len);
+static int spi_get_data(int fd, int *rx_buf);
+static int spi_get_response(int fd, int *rx_buf);
+static int update_pwr_file(int pwr);
+static int update_sw(int fd, int sw_state, int last_sw_state);
 
 static DBusMessage *create_property_get_message(const char *bus_name, const char *path, const char *iface, const char *propname);
-static char extract_bool_from_variant(DBusMessage *reply, DBusError *error);
-static char get_bool_property(DBusConnection *connection, const char *bus_name, const char *path, const char *iface, const char *propname, DBusError *error);
-static void extract_string_from_variant(DBusMessage *reply, DBusError *error, char **result);
-static void get_string_property(DBusConnection *connection, const char *bus_name, const char *path, const char *iface, const char *propname, DBusError *error, char **result);
 
-uint8_t j1850_crc(uint8_t *msg_buf, int8_t nbytes);
-static uint8_t xferbyte(int fd, uint8_t outbyte);
-
-static char get_bool_property(DBusConnection *connection, const char *bus_name, const char *path, const char *iface, const char *propname, DBusError *error) {
-    DBusError myError;
-    char result = 0;
-    DBusMessage *queryMessage = NULL;
-    DBusMessage *replyMessage = NULL;
- 
-    dbus_error_init(&myError);
-     
-    queryMessage = create_property_get_message(bus_name, path, iface, propname);
-    replyMessage = dbus_connection_send_with_reply_and_block(connection,
-                          queryMessage,
-                          1000,
-                          &myError);
-    dbus_message_unref(queryMessage);
-    if (dbus_error_is_set(&myError)) {
-        dbus_move_error(&myError, error);
-        return 0;
-    }
- 
-    result = extract_bool_from_variant(replyMessage, &myError);
-    if (dbus_error_is_set(&myError)) {
-        dbus_move_error(&myError, error);
-        return 0;
-    }
- 
-    dbus_message_unref(replyMessage);
-     
-    return result;
+static int xferbyte(int fd, int outbyte) {
+    int ret;
+    int rx = 0;
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (unsigned long)&outbyte,
+        .rx_buf = (unsigned long)&rx,
+        .len = 1,
+        .delay_usecs = delay,
+        .speed_hz = 0,
+        .bits_per_word = 0,
+    };
+    
+    ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
+    
+    if(ret < 0) return ret;
+    else return rx;
 }
 
-static char extract_bool_from_variant(DBusMessage *reply, DBusError *error) {
-    DBusMessageIter iter;
-    DBusMessageIter sub;
-    char result;
-     
-    dbus_message_iter_init(reply, &iter);
- 
-    if (DBUS_TYPE_VARIANT != dbus_message_iter_get_arg_type(&iter)) {
-        dbus_set_error_const(error, "reply_should_be_variant", "This message hasn't a variant response type");
-        return 0;
+static int update_pwr_file(int pwr) {
+    int fd;
+    
+    if(pwr) {
+        if(access(PWR_FILE_PATH, F_OK) != -1 ) {
+            if(remove(PWR_FILE_PATH) < 0) return -1;
+        }
     }
- 
-    dbus_message_iter_recurse(&iter, &sub);
- 
-    if (DBUS_TYPE_BOOLEAN != dbus_message_iter_get_arg_type(&sub)) {
-        dbus_set_error_const(error, "variant_should_be_boolean", "This variant reply message must have boolean content");
-        return 0;
+    else {
+        if(access(PWR_FILE_PATH, F_OK) == -1) {
+            fd = open(PWR_FILE_PATH, O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
+            
+            if(fd < 0) {
+                printf("Error creating pwr file\n");
+                return -1;
+            }
+            else close(fd);
+        }
     }
- 
-    dbus_message_iter_get_basic(&sub, &result);
-    return result;
+    
+    return 0;
 }
 
-static void get_string_property(DBusConnection *connection, const char *bus_name, const char *path, const char *iface, const char *propname, DBusError *error, char **result) {
-    DBusError myError;
-    DBusMessage *queryMessage = NULL;
-    DBusMessage *replyMessage = NULL;
- 
-    dbus_error_init(&myError);
-     
-    queryMessage = create_property_get_message(bus_name, path, iface, propname);
-    replyMessage = dbus_connection_send_with_reply_and_block(connection,
-                          queryMessage,
-                          1000,
-                          &myError);
-    dbus_message_unref(queryMessage);
-    if (dbus_error_is_set(&myError)) {
-        dbus_move_error(&myError, error);
-        return;
+static int update_sw(int fd, int sw_state, int last_sw_state) {
+    int ret;
+    int send_buf[] = {0x07, 0x04, 0x3D, 0x11, 0x00, 0x00};
+    
+    if(sw_state) {
+        switch(sw_state) {
+            //Off/Vol-
+            case 0x01:
+                send_buf[4] = 0x02;
+                send_buf[5] = 0x00;
+                break;
+            //Cancel/Mode
+            case 0x02:
+                send_buf[4] = 0x00;
+                send_buf[5] = 0x02;
+                break;
+            //Set/Seek-
+            case 0x03:
+                send_buf[4] = 0x10;
+                send_buf[5] = 0x00;
+                break;
+            //Resume/Seek+
+            case 0x04:
+                send_buf[4] = 0x20;
+                send_buf[5] = 0x00;
+                break;
+            //On/Vol+
+            case 0x05:
+                send_buf[4] = 0x04;
+                send_buf[5] = 0x00;
+                break;
+        }
+        ret = spi_send_data(fd, send_buf, 6);
     }
- 
-    extract_string_from_variant(replyMessage, &myError, result);
-    if (dbus_error_is_set(&myError)) {
-        dbus_move_error(&myError, error);
-        return;
+    else {
+        ret = spi_send_data(fd, send_buf, 6);
     }
- 
-    dbus_message_unref(replyMessage);
+    
+    return ret;
 }
 
-static void extract_string_from_variant(DBusMessage *reply, DBusError *error, char **result) {
-    DBusMessageIter iter;
-    DBusMessageIter sub;
-     
-    dbus_message_iter_init(reply, &iter);
- 
-    if (DBUS_TYPE_VARIANT != dbus_message_iter_get_arg_type(&iter)) {
-        dbus_set_error_const(error, "reply_should_be_variant", "This message hasn't a variant response type");
-        return;
+static int set_listen_headers(int fd, int *headers) {
+    int ret;
+    int data;
+    int nheaders = 0;
+    
+    data = 0x05;
+    ret = spi_send_data(fd, &data, 1);
+    if(ret < 0) return ret;
+    
+	while(headers[nheaders] != 0) {
+        data = 0x06;
+        ret = spi_send_data(fd, &data, 1);
+        if(ret < 0) return ret;
+        ret = spi_send_data(fd, &headers[nheaders], 1);
+        if(ret < 0) return ret;
+		nheaders++;
+	}
+    
+    return 0;
+}
+
+static void print_j1850_msg(int *msg, int bytes, int bus) {
+    int priority = (msg[0] & 0b11100000) >> 5;
+    int headertype = 3;
+    if((msg[0] & 0b00010000) > 0) headertype = 1;
+    char ifr[] = "N";
+    if((msg[0] & 0b00001000) > 0) ifr[0] = 'N';
+    int addr = ((msg[0] & 0b00000100) >> 2) ^ 0x01;
+    headertype = headertype - addr;
+    char addressing[] = "F";
+    if(!addr) addressing[0] = 'P';
+    int msg_type = msg[0] & 0b00000011;
+    
+    char target[] = "--";
+    char source[] = "--";
+    if(headertype == 3) {
+        snprintf(target, sizeof(target), "%.2X", msg[1]);
+        snprintf(source, sizeof(source), "%.2X", msg[2]);
     }
- 
-    dbus_message_iter_recurse(&iter, &sub);
- 
-    if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&sub)) {
-        dbus_set_error_const(error, "variant_should_be_string", "This variant reply message must have string content");
-        return;
+    else if(headertype == 2) {
+        snprintf(target, sizeof(target), "%.2X", msg[1]);
     }
- 
-    dbus_message_iter_get_basic(&sub, result);
+
+    char output[256] = {0};
+    
+    snprintf(output, sizeof(output), "BUS: %1i - HDR: %.2X (P%2i HL%1i IFR: %s ADR: %s TP%1i T%s S%s) ", bus, msg[0], priority, headertype, ifr, addressing, msg_type, target, source);
+    
+    char message[64] = {0};
+    strcat(message, "MSG: ");
+    int mbytes = bytes - headertype - 1;
+    int i;
+    for(i = 0; i < mbytes; i++) {
+        char tempstr[8] = {0};
+        
+        snprintf(tempstr, sizeof(tempstr), "%.2X ", msg[i+headertype]);
+        strcat(message, tempstr);
+    }
+    for(i=i; i<(12); i++) {
+        strcat(message, "   ");
+    }
+    strcat(message, "[");
+    for(i = 0; i < mbytes; i++) {
+        char tempstr[8] = {0};
+        
+        snprintf(tempstr, sizeof(tempstr), "%c", msg[i+headertype]);
+        strcat(message, tempstr);
+    }
+    for(i=i; i<(12); i++) {
+        strcat(message, " ");
+    }
+    strcat(message, "] ");
+    strcat(output, message);
+    
+    char crc[8] = {0};
+    snprintf(crc, sizeof(crc), "CRC: %.2X", msg[11]);
+    
+    strcat(output, crc);
+			
+    printf("%s\n", output);
+}
+
+static int get_j1850_msg(int fd, int bus, int *data) {
+    int ret;
+    int i;
+    int rx_buf[64];
+    int tx_buf;
+    
+    //Clear send buffer on micro
+    do {
+        ret = spi_get_data(fd, rx_buf);
+    } while(ret > 0);
+    if(ret < 0) return ret;
+    
+    //Request the next message in the buffer
+    if(bus == 0) tx_buf = 0x03;
+    else tx_buf = 0x04;
+    ret = spi_send_data(fd, &tx_buf, 1);
+    if(ret < 0) return ret;
+    
+    //Wait for and get the micro's response
+    ret = spi_get_response(fd, rx_buf);
+    if(ret < 0) return ret;
+    ret --;
+    
+    if(rx_buf[0] != 0x00) {
+        //Copy to output, discarding status byte
+        for(i=0; i<ret; i++) data[i] = rx_buf[i+1];
+        
+        if(dbg_level) print_j1850_msg(data, ret, bus);
+    }
+    
+    return ret;
+}
+
+static int spi_send_data(int fd, int *tx_buf, int len) {
+    int ret;
+    
+    int i;
+    for(i=0; i<len; i++) {
+        //Send write command
+        ret = xferbyte(fd, 0x02);
+        if(ret < 0) return ret;
+        
+        //Send data byte and verify command/data
+        ret = xferbyte(fd, tx_buf[i]);
+        if(ret != 0x02) {
+            printf("Command didn't match request, wanted %i, got %i\n", 0x02, ret);
+            return -1;
+        }
+        ret = xferbyte(fd, 0x00);
+        if(ret != tx_buf[i]) {
+            printf("Data didn't match request, wanted %i, got %i\n", tx_buf[i], ret);
+            return -1;
+        }
+    }
+    
+    return 0;
+}
+
+static int spi_get_data(int fd, int *rx_buf) {
+    int ret;
+    int len = 0;
+    
+    //Clear SPDR and get buffer status
+    ret = xferbyte(fd, 0x00);
+    if(ret < 0) return ret;
+    ret = xferbyte(fd, 0x00);
+    if(ret < 0) return ret;
+    
+    while(ret) {
+        //Send and verify read command
+        ret = xferbyte(fd, 0x01);
+        if(ret < 0) return ret;
+        ret = xferbyte(fd, 0x00);
+        if(ret != 1) return -1;
+        
+        //Get actual data byte
+        ret = xferbyte(fd, 0x00);
+        if(ret < 0) return ret;
+        rx_buf[len] = ret;
+        len ++;
+        
+        //Get buffer status
+        ret = xferbyte(fd, 0x00);
+        if(ret < 0) return ret;
+    }
+    
+    return len;
+}
+
+static int spi_get_response(int fd, int *rx_buf) {
+    int ret;
+    struct timespec start, end;
+    
+    //Wait for the micro to respond to our request
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    do {
+        ret = spi_get_data(fd, rx_buf);
+        if(ret < 1) return ret;
+        
+        //Give up after 100ms
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        if(end.tv_nsec - start.tv_nsec > 100000000) return -1;
+    } while(ret == 0);
+    
+    return ret;
+}
+
+void sig_handler(int sig) {
+    if(sig == SIGINT) state = 0xFF;
 }
 
 static DBusMessage *create_property_get_message(const char *bus_name, const char *path, const char *iface, const char *propname) {
@@ -231,67 +393,11 @@ static void get_track_parameter(DBusConnection *connection, const char *bus_name
     dbus_message_unref(replyMessage);
 }
 
-void dbus_play(DBusConnection *connection) {
-	DBusMessage* msg;
-	DBusPendingCall* pending;
-
-	msg = dbus_message_new_method_call("org.bluez", // target for the method call
-	"/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0", // object to call on
-	"org.bluez.MediaPlayer1", // interface to call on
-	"Play"); // method name
-	if (NULL == msg) { 
-		fprintf(stderr, "Message Null\n");
-		return;
-	}
-
-	// send message and get a handle for a reply
-	if (!dbus_connection_send_with_reply (connection, msg, &pending, -1)) { // -1 is default timeout
-		fprintf(stderr, "Out Of Memory!\n"); 
-		return;
-	}
-	if (NULL == pending) { 
-		fprintf(stderr, "Pending Call Null\n"); 
-		return; 
-	}
-	dbus_connection_flush(connection);
-
-	// free message
-	dbus_message_unref(msg);
-}
-
-void dbus_pause(DBusConnection *connection) {
-	DBusMessage* msg;
-	DBusPendingCall* pending;
-
-	msg = dbus_message_new_method_call("org.bluez", // target for the method call
-	"/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0", // object to call on
-	"org.bluez.MediaPlayer1", // interface to call on
-	"Pause"); // method name
-	if (NULL == msg) { 
-		fprintf(stderr, "Message Null\n");
-		return;
-	}
-
-	// send message and get a handle for a reply
-	if (!dbus_connection_send_with_reply (connection, msg, &pending, -1)) { // -1 is default timeout
-		fprintf(stderr, "Out Of Memory!\n"); 
-		return;
-	}
-	if (NULL == pending) { 
-		fprintf(stderr, "Pending Call Null\n"); 
-		return; 
-	}
-	dbus_connection_flush(connection);
-
-	// free message
-	dbus_message_unref(msg);
-}
-
 static int send_info(int fd, char *text, uint8_t field) {
 	int character = 0;
 	int msg_char = 0;
 	int msgs = 0;
-	uint8_t msg[9][10] = {0};
+	int msg[9][8] = {0};
 	int maxchar;
 	
 	switch(field) {
@@ -322,10 +428,9 @@ static int send_info(int fd, char *text, uint8_t field) {
 		}
 		for(; msg_char<4; msg_char++) msg[msgs][msg_char+4] = 0x20;
 		
-		msg[msgs][0] = 0x06;
-		msg[msgs][1] = 0x07;
+		msg[msgs][0] = 0x08;
+		msg[msgs][1] = 0x06;
 		msg[msgs][2] = 0xAB;
-		msg[msgs][9] = 0x00;
 		
 		msg_char = 0;
 		msgs ++;
@@ -336,150 +441,114 @@ static int send_info(int fd, char *text, uint8_t field) {
 	int sendmsg;
 	for(sendmsg=0; sendmsg<msgs; sendmsg++) {
 		msg[sendmsg][3] += 0x10 * (msgs-sendmsg) + field;
-		msg[sendmsg][8] = j1850_crc(&msg[sendmsg][2], 6);
 		
-		uint8_t i;
-		for(i=0; i<10; i++) xferbyte(fd, msg[sendmsg][i]);
+		spi_send_data(fd, &msg[sendmsg][0], 8);
 	}
 	
 	return 0;
 }
 
-int get_switches(int fd) {
-	uint8_t msg[] = {0x01, 0x00};
-	
-	uint8_t i;
-	uint8_t ret;
-	for(i=0; i<sizeof(msg)+1; i++) ret = xferbyte(fd, msg[i]);
-	
-	return (int)ret;
-}
+void dbus_method(DBusConnection *connection, char *method) {
+	DBusMessage* msg;
+	DBusPendingCall* pending;
 
-void set_listen_headers(int fd, uint8_t *headers) {
-	uint8_t msg[18] = {0};
-	int nheaders = 0;
-	
-	msg[0] = 0x07;
-	
-	while(headers[nheaders] != 0) {
-		msg[2+nheaders] = headers[nheaders];
-		nheaders++;
+	msg = dbus_message_new_method_call("org.bluez", // target for the method call
+	"/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0", // object to call on
+	"org.bluez.MediaPlayer1", // interface to call on
+	method); // method name
+	if (NULL == msg) { 
+		fprintf(stderr, "Message Null\n");
+		return;
 	}
-	
-	msg[1] = nheaders;
-	
-	uint8_t i;
-	for(i=0; i<(nheaders+3); i++) xferbyte(fd, msg[i]);
-}
 
-uint8_t j1850_crc(uint8_t *msg_buf, int8_t nbytes) {
-	uint8_t crc_reg=0xff,poly,byte_count,bit_count;
-	uint8_t *byte_point;
-	uint8_t bit_point;
-
-	for (byte_count=0, byte_point=msg_buf; byte_count<nbytes; ++byte_count, ++byte_point)
-	{
-		for (bit_count=0, bit_point=0x80 ; bit_count<8; ++bit_count, bit_point>>=1)
-		{
-			if (bit_point & *byte_point)	// case for new bit = 1
-			{
-				if (crc_reg & 0x80)
-					poly=1;	// define the polynomial
-				else
-					poly=0x1c;
-				crc_reg= ( (crc_reg << 1) | 1) ^ poly;
-			}
-			else		// case for new bit = 0
-			{
-				poly=0;
-				if (crc_reg & 0x80)
-					poly=0x1d;
-				crc_reg= (crc_reg << 1) ^ poly;
-			}
-		}
+	// send message and get a handle for a reply
+	if (!dbus_connection_send_with_reply (connection, msg, &pending, -1)) { // -1 is default timeout
+		fprintf(stderr, "Out Of Memory!\n"); 
+		return;
 	}
-	return ~crc_reg;	// Return CRC
+	if (NULL == pending) { 
+		fprintf(stderr, "Pending Call Null\n"); 
+		return; 
+	}
+	dbus_connection_flush(connection);
+
+	// free message
+	dbus_message_unref(msg);
 }
 
-static uint8_t xferbyte(int fd, uint8_t outbyte) {
-	int ret;
-	uint8_t tx[] = {outbyte};
-	uint8_t rx[] = {0};
-	struct spi_ioc_transfer tr = {
-		.tx_buf = (unsigned long)tx,
-		.rx_buf = (unsigned long)rx,
-		.len = ARRAY_SIZE(tx),
-		.delay_usecs = delay,
-		.speed_hz = 0,
-		.bits_per_word = 0,
-	};
-	
-	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
-	if (ret == -1)
-		pabort("can't send spi message");
-		
-	return rx[0];
-}
+static int spi_init(int *fd) {
+    int ret;
+    
+    while(*fd < 0) {
+        *fd = open(device, O_RDWR);
+        if (*fd < 0) {
+            printf("can't open spi device\n");
+            nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+        }
+    }
+    
+    // spi mode
+    ret = ioctl(*fd, SPI_IOC_WR_MODE, &mode);
+    if (ret == -1) {
+        printf("can't set spi mode\n");
+        return ret;
+    }
+    ret = ioctl(*fd, SPI_IOC_RD_MODE, &mode);
+    if (ret == -1) {
+        printf("can't get spi mode\n");
+        return ret;
+    }
 
-static int checkpwr(int fd)
-{
-	uint8_t pin;
-	
-	pin = xferbyte(fd, 0x02);
-	pin = xferbyte(fd, 0x00);
-	if(pin != 0x02) return -1;
-	pin = xferbyte(fd, 0x00);
+    // bits per word
+    ret = ioctl(*fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    if (ret == -1) {
+        printf("can't set bits per word\n");
+        return ret;
+    }
+    ret = ioctl(*fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
+    if (ret == -1) {
+        printf("can't get bits per word\n");
+        return ret;
+    }
 
-	return pin & 1;
-}
-
-void sig_handler(int sig) {
-	if(sig == SIGINT) state = 0xFF;
+    // max speed hz
+    ret = ioctl(*fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+    if (ret == -1) {
+        printf("can't set max speed hz\n");
+        return ret;
+    }
+    ret = ioctl(*fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
+    if (ret == -1) {
+        printf("can't get max speed hz\n");
+        return ret;
+    }
+    
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
-	int ret = 0;
-	int fd = -1;
+    int ret = 0;
+    int fd = -1;
+    
+    dbg_level = 0;
+    listen = 0;
+    int opt;
+    while ((opt = getopt(argc, argv, "dl")) != -1) {
+        switch (opt) {
+        case 'd': dbg_level = 1; break;
+        case 'l': listen = 1; break;
+        default:
+            fprintf(stderr, "Usage: %s [-dl]\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
 
-	while(fd < 0) {
-		fd = open(device, O_RDWR);
-		if (fd < 0) {
-			printf("can't open spi device");
-			usleep(500000);
-		}
-	}
-	
-	/*
-	 * spi mode
-	 */
-	ret = ioctl(fd, SPI_IOC_WR_MODE, &mode);
-	if (ret == -1) pabort("can't set spi mode");
-
-	ret = ioctl(fd, SPI_IOC_RD_MODE, &mode);
-	if (ret == -1) pabort("can't get spi mode");
-
-	/*
-	 * bits per word
-	 */
-	ret = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
-	if (ret == -1) pabort("can't set bits per word");
-
-	ret = ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
-	if (ret == -1) pabort("can't get bits per word");
-
-	/*
-	 * max speed hz
-	 */
-	ret = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
-	if (ret == -1) pabort("can't set max speed hz");
-
-	ret = ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
-	if (ret == -1) pabort("can't get max speed hz");
-	
-	signal(SIGINT, sig_handler);
-	
-	DBusConnection *connection = NULL;
+    if(spi_init(&fd) < 0) return -1;
+    
+    signal(SIGINT, sig_handler);
+    
+    DBusConnection *connection = NULL;
     DBusError error;
  
     dbus_error_init(&error);
@@ -492,160 +561,90 @@ int main(int argc, char *argv[])
     puts("This is my unique name");
     puts(dbus_bus_get_unique_name(connection));
     
-	dbus_play(connection);
-	
-//	uint8_t headers[] = {0x8D, 0x80, 0x3D, 0x00};
-	uint8_t headers[] = {0x00};
-	set_listen_headers(fd, headers);
-	
-	int info_tmr = 0;
-	int last_sw = 0;
-	
-	state = 0;
-	while(1) {
-		uint8_t ret;
-		uint8_t command;
-		uint8_t bytes;
-		
-		info_tmr++;
-		
-		uint8_t bus;
-		for(bus = 0; bus < 2; bus++) {
-			command = bus + 3;
-			xferbyte(fd, command);
-			command = xferbyte(fd, 0x00);
-			bytes = xferbyte(fd, 0x00);
-			
-			//if(bytes > 0) printf("\n");
-			uint8_t text[12] = { 0 };
-			for(int i=0; i<bytes; i++) {
-				ret = xferbyte(fd, 0x00);
-
-				if (bytes > 0) {
-					if(i == bytes-1) text[11] = ret;
-					else text[i] = ret;
-					//printf("%.2X ", ret);
-				}
-			}
-			
-			if(bytes) {
-#ifndef PRINT_MSG
-				if(text[0] == 0x8D && text[1] == 0x0F) {
-					uint8_t msg[12];
-					state = 1;
-					if(text[2] == 0x26) {
-						msg[0] = 0x05;
-						msg[1] = 0x06;
-						msg[2] = 0x8D;
-						msg[3] = 0x22;
-						msg[4] = 0x11;
-						msg[5] = 0x01;
-						msg[6] = 0xFF;
-						msg[7] = j1850_crc(&msg[2], 5);
-						msg[8] = 0x00;
-						//printf("\n");
-						uint8_t i;
-						for(i=0; i<9; i++) {
-							xferbyte(fd, msg[i]);
-							//printf("%.2X ", msg[i]);
-						}
-						msg[0] = 0x06;
-						//printf("\n");
-						for(i=0; i<9; i++) {
-							xferbyte(fd, msg[i]);
-							//printf("%.2X ", msg[i]);
-						}
-					}
-					else {
-						state = 0;
-						msg[0] = 0x05;
-						msg[1] = 0x06;
-						msg[2] = 0x8D;
-						msg[3] = 0x22;
-						msg[4] = 0x10;
-						msg[5] = 0x00;
-						msg[6] = 0x01;
-						msg[7] = j1850_crc(&msg[2], 5);
-						msg[8] = 0x00;
-						//printf("\n");
-						uint8_t i;
-						for(i=0; i<9; i++) {
-							xferbyte(fd, msg[i]);
-							//printf("%.2X ", msg[i]);
-						}
-					}
-				}
-#endif	
-#ifdef PRINT_MSG
-				uint8_t priority = (text[0] & 0b11100000) >> 5;
-				uint8_t headertype = 3;
-				if((text[0] & 0b00010000) > 0) headertype = 1;
-				char ifr[] = "N";
-				if((text[0] & 0b00001000) > 0) ifr[0] = 'N';
-				uint8_t addr = ((text[0] & 0b00000100) >> 2) ^ 0x01;
-				headertype = headertype - addr;
-				char addressing[] = "F";
-				if(!addr) addressing[0] = 'P';
-				uint8_t msg_type = text[0] & 0b00000011;
-				
-				char target[] = "--";
-				char source[] = "--";
-				if(headertype == 3) {
-					snprintf(target, sizeof(target), "%.2X", text[1]);
-					snprintf(source, sizeof(source), "%.2X", text[2]);
-				}
-				else if(headertype == 2) {
-					snprintf(target, sizeof(target), "%.2X", text[1]);
-				}
-
-				char output[256] = {0};
-				
-				snprintf(output, sizeof(output), "BUS: %1u - HDR: %.2X (P%2u HL%1u IFR: %s ADR: %s TP%1u T%s S%s) ", bus, text[0], priority, headertype, ifr, addressing, msg_type, target, source);
-				
-				char message[64] = {0};
-				strcat(message, "MSG: ");
-				uint8_t mbytes = bytes - headertype - 1;
-				uint8_t i;
-				for(i = 0; i < mbytes; i++) {
-					char tempstr[8] = {0};
-					
-					snprintf(tempstr, sizeof(tempstr), "%.2X ", text[i+headertype]);
-					strcat(message, tempstr);
-				}
-				for(i=i; i<(12); i++) {
-					strcat(message, "   ");
-				}
-				strcat(message, "[");
-				for(i = 0; i < mbytes; i++) {
-					char tempstr[8] = {0};
-					
-					snprintf(tempstr, sizeof(tempstr), "%c", text[i+headertype]);
-					strcat(message, tempstr);
-				}
-				for(i=i; i<(12); i++) {
-					strcat(message, " ");
-				}
-				strcat(message, "] ");
-				strcat(output, message);
-				
-				char crc[8] = {0};
-				snprintf(crc, sizeof(crc), "CRC: %.2X", text[11]);
-				
-				strcat(output, crc);
-			
-				printf("\n%s", output);
-#endif
-			}
-
-			fflush(stdout);
-		}
-		
-#ifndef PRINT_MSG
-		if(state) {
-			if(info_tmr > 20) {
-				info_tmr = 0;
-				/*
-				char *song = NULL;
+    int headers[8] = {0x00};
+	if(!listen) {
+        headers[0] = 0x8D;
+        headers[1] = 0x3D;
+    }
+    ret = set_listen_headers(fd, headers);
+    if(ret < 0) exit(EXIT_FAILURE);
+    
+    int tmr_10ms = 0;
+    state = 0;
+    int last_sw_state = 0;
+    int last_state = 0;
+    while(1) {
+        int rx_buf[64];
+        int tx_buf[64];
+        int sw_state;
+        
+        if(state == 0xFF) break;
+      
+        //Get switch state
+        while(spi_get_data(fd, rx_buf) > 0);
+        tx_buf[0] = 0x01;
+        ret = spi_send_data(fd, tx_buf, 1);
+        if(ret < 0) printf("Error sending switch command: %i\n", ret);
+        ret = spi_get_response(fd, rx_buf);
+        if(ret < 0) printf("Error getting switch response: %i\n", ret);
+        sw_state = rx_buf[0];
+        
+        //Do switches
+        if(sw_state != last_sw_state) {
+            last_sw_state = sw_state;
+            
+            if(dbg_level) printf("Switch byte: %.2X\n", sw_state);
+            ret = update_sw(fd, sw_state, last_sw_state);
+            if(ret < 0) printf("Error handling switch state: %i\n", ret);
+        }
+        
+        //Get J1850 bus 0 messages
+        ret = get_j1850_msg(fd, 0, rx_buf);
+        if(ret < 0) printf("Error retrieving bus 0 messages: %i\n", ret);
+        if(ret && !listen) {
+            if(rx_buf[0] == 0x8D && rx_buf[1] == 0x0F) {
+                if(rx_buf[2] == 0x26) {
+                    if(dbg_level) printf("Sending sat active\n");
+                    int send_buf[] = {0x07, 0x05, 0x8D, 0x22, 0x11, 0x01, 0x01};
+                    spi_send_data(fd, send_buf, 7);
+                    state = 0x01;
+                }
+                else {
+                    if(dbg_level) printf("Sending sat exists\n");
+                    int send_buf[] = {0x07, 0x05, 0x8D, 0x22, 0x10, 0x00, 0x01};
+                    spi_send_data(fd, send_buf, 7);
+                    state = 0x00;
+                }
+            }
+            if(state) {
+                if(rx_buf[0] == 0x3D && rx_buf[1] == 0x12 && rx_buf[2] == 0x83) {
+                    if(rx_buf[3] == 0x26) dbus_method(connection, "Next");
+                    else if(rx_buf[3] == 0x27) dbus_method(connection, "Previous");
+                }
+            }
+        }
+        
+        //Get J1850 bus 1 messages
+        ret = get_j1850_msg(fd, 1, rx_buf);
+        if(ret < 0) printf("Error retrieving bus 1 messages: %i\n", ret);
+        
+        //250ms timer
+        if(tmr_10ms > 25) {
+            tmr_10ms = 0;
+            
+            if(sw_state == 0) update_sw(fd, 0x00, 0x00);
+            
+            if(state != last_state) {
+                last_state = state;
+                if(state) {
+                    dbus_method(connection, "Play");
+                }
+                else {
+                    dbus_method(connection, "Pause");
+                }
+            }
+            if(state) {
+                char *song = NULL;
 				dbus_error_init(&error);
 				get_track_parameter(connection, "org.bluez",
 								 "/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0",
@@ -677,88 +676,32 @@ int main(int argc, char *argv[])
 				//if(dbus_error_is_set(&error)) printf("%s", error.message);
 				
 				if(artist) send_info(fd, artist, 0x05);
-				*/
+				
 				send_info(fd, "Playing Bluetooth", 0x00);
-				send_info(fd, "", 0x02);
-			}
-		}
-		
-		int sw = get_switches(fd);
-		/*
-		if(sw != last_sw) {
-			last_sw = sw;
-			uint8_t msg[8];
-			msg[0] = 0x05;
-			msg[1] = 0x05;
-			msg[2] = 0x3D;
-			msg[3] = 0x11;
-			msg[4] = 0x00;
-			msg[5] = 0x00;
-			msg[7] = 0x00;
-			switch(sw & 0x0F) {
-				case 0x01:
-					msg[4] = 0x00;
-					msg[5] = 0x02;
-					break;
-				case 0x02:
-					msg[4] = 0x20;
-					msg[5] = 0x00;
-					break;
-				case 0x03:
-					msg[4] = 0x40;
-					msg[5] = 0x00;
-					break;
-				case 0x04:
-					msg[4] = 0x10;
-					msg[5] = 0x00;
-					break;
-				case 0x05:
-					msg[4] = 0x20;
-					msg[5] = 0x00;
-					break;
-			}
-			msg[6] = j1850_crc(&msg[2], 5);
-			msg[7] = 0x00;
-			uint8_t i;
-			for(i=0; i<8; i++) {
-				xferbyte(fd, msg[i]);
-				printf("%.2X ", msg[i]);
-			}
-			printf("\n");
-		}
-		*/
-		
-		ret = checkpwr(fd);
-		if(ret < 0) printf("Error checking power pin status\n");
-		else if(ret) {
-			if( access( "/home/pi/pwroff", F_OK ) != -1 ) {
-				remove("/home/pi/pwroff");
-			}
-		}
-		else {
-			if( access( "/home/pi/pwroff", F_OK ) == -1 ) {
-				fd2 = open("/home/pi/pwroff", O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
-			}
-		}
-#endif
-
-		if(state == 0xFF) {
-			printf("\n\rQuitting...\n\r");
-			break;
-		}
-		
-		usleep(10000);
-	}
-
-	close(fd);
-	
-	dbus_pause(connection);
-	
-	dbus_connection_unref(connection);
-
-	if( access( "/home/pi/pwroff", F_OK ) != -1 ) {
-		remove("/home/pi/pwroff");
-	}
-
-	return ret;
+                send_info(fd, "", 0x02);
+            }
+        }
+        
+        //Do power pins
+        while(spi_get_data(fd, rx_buf) > 0);
+        tx_buf[0] = 0x02;
+        ret = spi_send_data(fd, tx_buf, 1);
+        if(ret < 0) printf("Error sending power command: %i\n", ret);
+        ret = spi_get_response(fd, rx_buf);
+        if(ret < 0) printf("Error getting power response: %i\n", ret);
+        ret = update_pwr_file(rx_buf[0] & 0x01);
+        if(ret < 0) printf("Error processing power: %i\n", ret);
+        
+        //Done
+        fflush(stdout);
+        nanosleep((const struct timespec[]){{0, 10000000L}}, NULL);
+        tmr_10ms ++;
+    }
+    
+    ret = update_pwr_file(0x01);
+    if(ret < 0) printf("Error cleaning up power: %i\n", ret);
+        
+    close(fd);
+    
+    exit(EXIT_SUCCESS);
 }

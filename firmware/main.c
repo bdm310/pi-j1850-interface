@@ -1,66 +1,67 @@
 /*
  * main.c - Pi J1850 Interface
  */
- 
+
 #include <avr/io.h>
 #include <stdint.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
-#include "spi.h"
 #include "main.h"
+#include "spi.h"
 #include "j1850.h"
 
+static volatile uint8_t sw_adc[2];
+static volatile uint8_t sw_new;
+
+static uint8_t last_sw_state;
+static uint8_t last_pwr_state;
 
 ISR(TIMER0_COMPA_vect) {
-    timer_10ms ++;
+    static uint8_t cnt_10ms;
+    
+    tmr_10ms ++;
     cnt_10ms ++;
-	
+    
     if(cnt_10ms == 100) {
-		cnt_10ms = 0;
-		timer_1s ++;
-	}
+        cnt_10ms = 0;
+        tmr_1s ++;
+    }
 }
-
 
 ISR(ADC_vect) {
-    uint8_t res = ADCH;
-	
     //Are we on channel 1?
     if(ADMUX & (1<<MUX0)) {
-        sw1_adc = res;
+        sw_adc[1] = ADCH;
         sw_new = 1;
-        ADMUX &= ~(1<<MUX0);
     }
-    else {
-        sw0_adc = res;
-
-        //Move to channel 1 and start the conversion
-        ADMUX |= (1<<MUX0);
-        ADCSRA |= (1<<ADSC);
-    }
-
+    else sw_adc[0] = ADCH;
+        
+    //Move channels and start the conversion
+    ADMUX = ADMUX ^ (1<<MUX0);
 }
 
-
-void timer_10ms_init(void) {
+static void tmrs_init(void) {
+    tmr_10ms = 0;
+    tmr_1s = 0;
+    
     //Select CTC mode
     TCCR0A = 0b00000010;
-    //Select x1024 prescalar for TC0
+    //Set a 10ms timeout with a x1024 prescaler
     TCCR0B = 0b00000101;
-    //Set a 10ms timeout 78
     OCR0A = 78;
-    //Enable OC0A interrupt
-    TIMSK0 = 0b00000010;
+    TIMSK0 |= (1<<OCIE0A);
 }
 
-
-void io_init(void) {
-    DDRD |= (1<<PORTD4);
-    PORTD |= (1<<PORTD4);
+static void io_init(void) {
+    //Power hold output
+    POWER_HOLD_DDR |= POWER_HOLD_MSK;
+    POWER_HOLD_PORT |= POWER_HOLD_MSK;
+    
+    DDRC |= (1<<PORTC2) | (1<<PORTC3);
 }
 
-void ad_init(void) {
+static void ad_init(void) {
     //Set result as left justified
     ADMUX |= (1<<ADLAR);
     //Auto trigger on TC0 match
@@ -71,163 +72,130 @@ void ad_init(void) {
     ADCSRA |= (1<<ADEN) | (1<<ADATE) | (1<<ADIE) | (1<<ADPS2);
 }
 
-void read_sw_state(void) {
-    uint8_t sw_state_new = 0;
-
-    if(sw0_adc > 213) sw_state_new |= 0x01;
-    else if(sw0_adc > 169) sw_state_new |= 0x02;
-    else if(sw0_adc > 119) sw_state_new |= 0x03;
-    else if(sw0_adc > 75) sw_state_new |= 0x04;
-    else if(sw0_adc > 27) sw_state_new |= 0x05;
-
-    if(sw1_adc > 213) sw_state_new |= 0x10;
-    else if(sw1_adc > 169) sw_state_new |= 0x20;
-    else if(sw1_adc > 119) sw_state_new |= 0x30;
-    else if(sw1_adc > 75) sw_state_new |= 0x40;
-    else if(sw1_adc > 27) sw_state_new |= 0x50;
-
-    sw_state = sw_state_new;
+static void read_input_state(void) {
+    uint8_t this_sw_state = 0;
+    uint8_t this_pwr_state = 0;
+    
+    uint8_t sw;
+    for(sw=0; sw<2; sw++) {
+        uint8_t rot = 0;
+        if(sw) rot = 4;
+        
+        if(sw_adc[sw] > SW_THRESH_4) this_sw_state |= 0x01<<rot;
+        else if(sw_adc[sw] > SW_THRESH_3) this_sw_state |= 0x02<<rot;
+        else if(sw_adc[sw] > SW_THRESH_2) this_sw_state |= 0x03<<rot;
+        else if(sw_adc[sw] > SW_THRESH_1) this_sw_state |= 0x04<<rot;
+        else if(sw_adc[sw] > SW_THRESH_0) this_sw_state |= 0x05<<rot;
+    }
+    
+    //Do a little debouncing
+    if(this_sw_state == last_sw_state) sw_state = this_sw_state;
+    last_sw_state = this_sw_state;
+    
+    if(ACC_REG & ACC_MSK) this_pwr_state |= 0x01;
+    if(PI_REG & PI_MSK) this_pwr_state |= 0x02;
+    
+    //Do a little debouncing
+    if(this_pwr_state == last_pwr_state) pwr_state = this_pwr_state;
+    last_pwr_state = this_pwr_state;
 }
 
 int main(void) {
-	uint8_t waiting = 1;
-	uint8_t shutdown_tmr = 0;
-	uint8_t cd_status = 0;
-	uint8_t bus;
-	
-	//Reset and turn off WDT
-	wdt_reset();
+    //Reset and turn off WDT
+    wdt_reset();
     MCUSR &= ~(1<<WDRF);
     WDTCSR |= (1<<WDCE) | (1<<WDE);
     WDTCSR = 0x00;
-	
-    timer_10ms_init();
+    
+    uint8_t waiting = 1;
+    uint8_t shutdown_tmr = 0;
+
+    //Timers
+    tmrs_init();
+    
+    //Other peripherals
     ad_init();
     io_init();
+    spi_init_slave();
     
     j1850_init();
     j1850_listen_bytes = 1;
     j1850_listen_headers[0] = 0x8D;
     
-    spi_active = 0;
-    spi_init_slave();                             //Initialize slave SPI
-	
     sei();
     
     for (;;)
     {
-		if(waiting && timer_1s > 40) waiting = 0;
+        //Do power handling
+        if(waiting && tmr_1s > 40) waiting = 0;
 		if(!waiting) {
-			if(PINC & (1<<PINC5)) {
-				PORTD |= (1<<PORTD4);
-				shutdown_tmr = timer_10ms;
+			if(PI_REG & PI_MSK) {
+				POWER_HOLD_PORT |= POWER_HOLD_MSK;
+				shutdown_tmr = tmr_10ms;
 			}
 			else {
-				if((uint8_t)(timer_10ms - shutdown_tmr) > 20) {
-					PORTD &= ~(1<<PORTD4);
+				if((uint8_t)(tmr_10ms - shutdown_tmr) > 20) {
+					POWER_HOLD_PORT &= ~POWER_HOLD_PORT;
 				}
 			}
-		}
-		cli();
-		if((uint8_t)(timer_10ms - last_spi_byte_tmr) > 50) {
-			spi_status = 0;
-		}
-		sei();
-		
-		cli();
-		for(bus=0; bus<2; bus++) {
-			if((j1850_bus[bus].tx_msg_start != j1850_bus[bus].tx_msg_end) && j1850_bus[bus].state == 0) {
-				j1850_send_packet(bus);
-			}
-		}
-		sei();
-		
-		for(bus=0; bus<2; bus++) {
-			volatile j1850_bus_t *j1850 = &j1850_bus[bus];
-			if(j1850->rx_msg_start != j1850->rx_msg_end) {
-				volatile j1850_msg_buf_t *msg = &j1850->rx_buf[j1850->rx_msg_start];
-				
-				uint8_t match = 0;
-				uint8_t i;
-				if(j1850_listen_bytes) {
-					for(i=0; i<j1850_listen_bytes; i++) {
-						if(msg->buf[0] == j1850_listen_headers[i]) {
-							match = 1;
-							break;
-						}
-					}
-				}
-				else match = 1;
-				
-				if(match) {
-					volatile j1850_msg_buf_t *rxmsg;
-					if(bus) rxmsg = &bus1_rx[bus1_rx_end];
-					else rxmsg = &bus0_rx[bus0_rx_end];
-					
-					//If the daemon isn't up yet, pretend to be a satellite module
-					if(bus == 0 && !spi_active) {
-						if(msg->buf[0] == 0x8D && msg->buf[1] == 0x0F) {
-							if(msg->buf[2] == 0x26) cd_status = 2;
-							else cd_status = 1;
-						}
-					}
-					
-					*rxmsg = *msg;
-					
-					cli();
-					if(bus) {
-						bus1_rx_end = bus1_rx_end + 1;;
-						if(bus1_rx_end == J1850_MSG_BUF_SIZE) bus1_rx_end = 0;
-					}
-					else {
-						bus0_rx_end = bus0_rx_end + 1;;
-						if(bus0_rx_end == J1850_MSG_BUF_SIZE) bus0_rx_end = 0;
-					}
-					sei();
-				}
-				
-				j1850->rx_msg_start ++;
-				if(j1850->rx_msg_start == J1850_MSG_BUF_SIZE) j1850->rx_msg_start = 0;
-			}
-		}
+        }
+
+        //Check for AD results, convert to switch states, check other inputs
+        if(sw_new) {
+            sw_new = 0;
+            read_input_state();
+        }
         
-		if(cd_status) {
-			switch( cd_status ){
-				case 1:
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[0] = 0x8D;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[1] = 0x22;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[2] = 0x10;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[3] = 0x00;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[4] = 0x01;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[0], 5);
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus[0].tx_msg_end++;
-					if(j1850_bus[0].tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus[0].tx_msg_end = 0;
-					sei();
-					cd_status = 0;
-					break;
-				case 2:
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[0] = 0x8D;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[1] = 0x22;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[2] = 0x11;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[3] = 0x01;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[4] = 0x01;
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[5] = j1850_crc((uint8_t *)&j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].buf[0], 5);
-					j1850_bus[0].tx_buf[j1850_bus[0].tx_msg_end].bytes = 6;
-					cli();
-					j1850_bus[0].tx_msg_end++;
-					if(j1850_bus[0].tx_msg_end == J1850_MSG_BUF_SIZE) j1850_bus[0].tx_msg_end = 0;
-					sei();
-					cd_status = 0;
-					break;
-			}
-		}
-		
-		if(sw_new) {
-			sw_new = 0;
-			read_sw_state();
-		}
+        //Do SPI
+        spi_process(tmr_10ms);
+        
+        //Do J1850
+        j1850_process();
+        
+        //If the pi hasn't started yet, do the minimum to pretend to be a satellite module
+        //and remove messages from the buffer as they come in
+        if(!spi_active) {
+            j1850_msg_buf_t *start = (j1850_msg_buf_t *)j1850_bus[0].rx_msg_start;
+            cli();
+            j1850_msg_buf_t *end = (j1850_msg_buf_t *)j1850_bus[0].rx_msg_end;
+            sei();
+        
+            if(start != end) {
+                if(start->buf[0] == 0x8D && start->buf[1] == 0x0F) {
+                    j1850_msg_buf_t *end = (j1850_msg_buf_t *)j1850_bus[0].tx_msg_end;
+                    if(start->buf[2] == 0x26) {
+                        end->buf[0] = 0x8D;
+                        end->buf[1] = 0x22;
+                        end->buf[2] = 0x11;
+                        end->buf[3] = 0x01;
+                        end->buf[4] = 0x01;
+                        end->buf[5] = j1850_crc(end->buf, 5);
+                        end->bytes = 6;
+                    }
+                    else {
+                        end->buf[0] = 0x8D;
+                        end->buf[1] = 0x22;
+                        end->buf[2] = 0x10;
+                        end->buf[3] = 0x00;
+                        end->buf[4] = 0x01;
+                        end->buf[5] = j1850_crc(end->buf, 5);
+                        end->bytes = 6;
+                    }
+                    
+                    end ++;
+                    if(end == &j1850_bus[0].tx_buf[J1850_MSG_BUF_SIZE_TX]) end = (j1850_msg_buf_t *)j1850_bus[0].tx_buf;
+                    //On overflow drop the last message
+                    cli();
+                    if(end != j1850_bus[0].tx_msg_start) {
+                        j1850_bus[0].tx_msg_end = end;
+                    }
+                    sei();
+                }
+                
+                j1850_bus[0].rx_msg_start ++;
+                if(j1850_bus[0].rx_msg_start == &j1850_bus[0].rx_buf[J1850_MSG_BUF_SIZE_RX]) j1850_bus[0].rx_msg_start = (j1850_msg_buf_t *)j1850_bus[0].rx_buf;
+            }
+        }
     }
     return (0);
 }
