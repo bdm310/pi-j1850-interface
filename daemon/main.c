@@ -339,6 +339,8 @@ static void get_track_parameter(DBusConnection *connection, const char *device, 
     
     char path[100] = {0};
     
+    if(device[0] == 0) return;
+    
     strcat(path, "/org/bluez/hci0/");
     strcat(path, device);
     strcat(path, "/player0");
@@ -436,32 +438,51 @@ static void get_device(DBusConnection *connection, DBusError *error, char *devic
     char *result = NULL;
     dbus_message_iter_get_basic(&iter, &result);
     
-    regex_t regex;
-    regmatch_t pmatch;
-    int reti;
-    char msgbuf[100];
-
-    /* Compile regular expression */
-    reti = regcomp(&regex, "\"dev_.*\"", 0);
-    if (reti) {
-        fprintf(stderr, "Could not compile regex\n");
-        exit(1);
-    }
-
-    /* Execute regular expression */
-    reti = regexec(&regex, result, 1, &pmatch, 0);
-    if (!reti) {
-        int len = pmatch.rm_eo - pmatch.rm_so - 2;
-        memcpy(device, result + pmatch.rm_so + 1, len);
-        device[len] = 0;
-    }
-    else {
-        regerror(reti, &regex, msgbuf, sizeof(msgbuf));
-        fprintf(stderr, "Regex match failed: %s\n", msgbuf);
-        return;
-    }
+    char *search = result;
+    char tempdev[24] = {0};
     
-    regfree(&regex);
+    do {
+        search = strstr(search, "dev_");
+        if(search != NULL) {
+            memcpy(tempdev, search, 21);
+            
+            char path[100] = {0};
+    
+            strcat(path, "/org/bluez/hci0/");
+            strcat(path, tempdev);
+    
+            queryMessage = dbus_message_new_method_call("org.bluez", // target for the method call
+                                                path, // object to call on
+                                                "org.freedesktop.DBus.Introspectable", // interface to call on
+                                                "Introspect"); // method name
+            replyMessage = dbus_connection_send_with_reply_and_block(connection,
+                                  queryMessage,
+                                  1000,
+                                  &myError);
+            dbus_message_unref(queryMessage);
+            if (dbus_error_is_set(&myError)) {
+                dbus_move_error(&myError, error);
+                return;
+            }
+             
+            dbus_message_iter_init(replyMessage, &iter);
+         
+            if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&iter)) {
+                dbus_set_error_const(error, "reply_should_be_string", "This message hasn't a string entry response type\n");
+                return;
+            }
+            
+            char *result2 = NULL;
+            dbus_message_iter_get_basic(&iter, &result2);
+            
+            if(strstr(result2, "player0") != NULL) {
+                memcpy(device, tempdev, 21);
+                break;
+            }
+            
+            search += 22;
+        }
+    } while (search != NULL);
 }
 
 static int send_info(int fd, char *text, uint8_t field) {
@@ -524,6 +545,8 @@ void dbus_method(DBusConnection *connection, char *device, char *method) {
 	DBusPendingCall* pending;
 
     char path[100] = {0};
+    
+    if(device[0] == 0) return;
     
     strcat(path, "/org/bluez/hci0/");
     strcat(path, device);
@@ -711,10 +734,15 @@ int main(int argc, char *argv[])
         if(tmr_10ms > 100) {
             tmr_10ms = 0;
             
+            int nodev = 0;
+            if(device[0] == 0) nodev = 1;
+            
             memset(device, 0, sizeof device);
             dbus_error_init(&error);
             get_device(connection, &error, device);
             if(dbus_error_is_set(&error)) printf("%s", error.message);
+            
+            if(device[0] && nodev) dbus_method(connection, device, "Play");
             
             if(sw_state == 0) update_sw(fd, 0x00, 0x00);
             
@@ -737,6 +765,9 @@ int main(int argc, char *argv[])
 				if(song) {
                     send_info(fd, song, 0x04);
                 }
+                else {
+                    send_info(fd, " ", 0x04);
+                }
 				
 				char *album = NULL;
 				dbus_error_init(&error);
@@ -746,7 +777,10 @@ int main(int argc, char *argv[])
 				if(album) {
                     send_info(fd, album, 0x01);
 				}
-				
+				else {
+                    send_info(fd, " ", 0x01);
+                }
+                
 				char *artist = NULL;
 				dbus_error_init(&error);
 				get_track_parameter(connection, device, &error, "Artist", &artist);
@@ -755,8 +789,11 @@ int main(int argc, char *argv[])
 				if(artist) {
                     send_info(fd, artist, 0x05);
 				}
+                else {
+                    send_info(fd, " ", 0x05);
+                }
 				
-                send_info(fd, "", 0x02);
+                send_info(fd, " ", 0x02);
             }
         }
         
