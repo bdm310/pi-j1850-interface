@@ -18,6 +18,7 @@
 #include <linux/spi/spidev.h>
 #include <string.h>
 #include <dbus/dbus.h>
+#include <regex.h>
 
 #define PWR_FILE_PATH "/home/pi/pwroff"
 
@@ -328,15 +329,24 @@ static DBusMessage *create_property_get_message(const char *bus_name, const char
  
     return queryMessage;
 }
-
-static void get_track_parameter(DBusConnection *connection, const char *bus_name, const char *path, const char *iface, const char *propname, DBusError *error, char *search_key, char **result) {
+                                 
+static void get_track_parameter(DBusConnection *connection, const char *device, DBusError *error, char *search_key, char **result) {
     DBusError myError;
     DBusMessage *queryMessage = NULL;
     DBusMessage *replyMessage = NULL;
  
     dbus_error_init(&myError);
-     
-    queryMessage = create_property_get_message(bus_name, path, iface, propname);
+    
+    char path[100] = {0};
+    
+    strcat(path, "/org/bluez/hci0/");
+    strcat(path, device);
+    strcat(path, "/player0");
+    
+    queryMessage = create_property_get_message("org.bluez",
+                                               path, 
+                                               "org.bluez.MediaPlayer1", 
+                                               "Track");
     replyMessage = dbus_connection_send_with_reply_and_block(connection,
                           queryMessage,
                           1000,
@@ -354,7 +364,7 @@ static void get_track_parameter(DBusConnection *connection, const char *bus_name
     dbus_message_iter_init(replyMessage, &iter);
  
     if (DBUS_TYPE_VARIANT != dbus_message_iter_get_arg_type(&iter)) {
-        dbus_set_error_const(error, "reply_should_be_variant", "This message hasn't a variant entry response type");
+        dbus_set_error_const(error, "reply_should_be_variant", "This message hasn't a variant entry response type\n");
         return;
     }
  
@@ -391,6 +401,67 @@ static void get_track_parameter(DBusConnection *connection, const char *bus_name
 	} while (dbus_message_iter_next(&sub));
  
     dbus_message_unref(replyMessage);
+}
+
+static void get_device(DBusConnection *connection, DBusError *error, char *device) {
+    DBusError myError;
+    DBusMessage *queryMessage = NULL;
+    DBusMessage *replyMessage = NULL;
+ 
+    dbus_error_init(&myError);
+     
+    queryMessage = dbus_message_new_method_call("org.bluez", // target for the method call
+                                                "/org/bluez/hci0", // object to call on
+                                                "org.freedesktop.DBus.Introspectable", // interface to call on
+                                                "Introspect"); // method name
+    replyMessage = dbus_connection_send_with_reply_and_block(connection,
+                          queryMessage,
+                          1000,
+                          &myError);
+    dbus_message_unref(queryMessage);
+    if (dbus_error_is_set(&myError)) {
+        dbus_move_error(&myError, error);
+        return;
+    }
+    
+    DBusMessageIter iter;
+     
+    dbus_message_iter_init(replyMessage, &iter);
+ 
+    if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&iter)) {
+        dbus_set_error_const(error, "reply_should_be_string", "This message hasn't a string entry response type\n");
+        return;
+    }
+    
+    char *result = NULL;
+    dbus_message_iter_get_basic(&iter, &result);
+    
+    regex_t regex;
+    regmatch_t pmatch;
+    int reti;
+    char msgbuf[100];
+
+    /* Compile regular expression */
+    reti = regcomp(&regex, "\"dev_.*\"", 0);
+    if (reti) {
+        fprintf(stderr, "Could not compile regex\n");
+        exit(1);
+    }
+
+    /* Execute regular expression */
+    reti = regexec(&regex, result, 1, &pmatch, 0);
+    if (!reti) {
+        int len = pmatch.rm_eo - pmatch.rm_so - 2;
+        memcpy(device, result + pmatch.rm_so + 1, len);
+        device[len] = 0;
+    }
+    else {
+        regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+        fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+        return;
+    }
+    
+    regfree(&regex);
 }
 
 static int send_info(int fd, char *text, uint8_t field) {
@@ -448,12 +519,18 @@ static int send_info(int fd, char *text, uint8_t field) {
 	return 0;
 }
 
-void dbus_method(DBusConnection *connection, char *method) {
+void dbus_method(DBusConnection *connection, char *device, char *method) {
 	DBusMessage* msg;
 	DBusPendingCall* pending;
 
+    char path[100] = {0};
+    
+    strcat(path, "/org/bluez/hci0/");
+    strcat(path, device);
+    strcat(path, "/player0");
+
 	msg = dbus_message_new_method_call("org.bluez", // target for the method call
-	"/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0", // object to call on
+	path, // object to call on
 	"org.bluez.MediaPlayer1", // interface to call on
 	method); // method name
 	if (NULL == msg) { 
@@ -569,6 +646,8 @@ int main(int argc, char *argv[])
     ret = set_listen_headers(fd, headers);
     if(ret < 0) exit(EXIT_FAILURE);
     
+    char device[24];
+    
     int tmr_10ms = 0;
     state = 0;
     int last_sw_state = 0;
@@ -618,8 +697,8 @@ int main(int argc, char *argv[])
             }
             if(state) {
                 if(rx_buf[0] == 0x3D && rx_buf[1] == 0x12 && rx_buf[2] == 0x83) {
-                    if(rx_buf[3] == 0x26) dbus_method(connection, "Next");
-                    else if(rx_buf[3] == 0x27) dbus_method(connection, "Previous");
+                    if(rx_buf[3] == 0x26) dbus_method(connection, device, "Next");
+                    else if(rx_buf[3] == 0x27) dbus_method(connection, device, "Previous");
                 }
             }
         }
@@ -628,56 +707,55 @@ int main(int argc, char *argv[])
         ret = get_j1850_msg(fd, 1, rx_buf);
         if(ret < 0) printf("Error retrieving bus 1 messages: %i\n", ret);
         
-        //250ms timer
-        if(tmr_10ms > 25) {
+        //1000ms timer
+        if(tmr_10ms > 100) {
             tmr_10ms = 0;
+            
+            memset(device, 0, sizeof device);
+            dbus_error_init(&error);
+            get_device(connection, &error, device);
+            if(dbus_error_is_set(&error)) printf("%s", error.message);
             
             if(sw_state == 0) update_sw(fd, 0x00, 0x00);
             
             if(state != last_state) {
                 last_state = state;
                 if(state) {
-                    dbus_method(connection, "Play");
+                    send_info(fd, "Playing Bluetooth", 0x00);
+                    dbus_method(connection, device, "Play");
                 }
                 else {
-                    dbus_method(connection, "Pause");
+                    dbus_method(connection, device, "Pause");
                 }
             }
             if(state) {
                 char *song = NULL;
 				dbus_error_init(&error);
-				get_track_parameter(connection, "org.bluez",
-								 "/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0",
-								 "org.bluez.MediaPlayer1",
-								 "Track",
-								 &error, "Title", &song);
-				//if(dbus_error_is_set(&error)) printf("%s", error.message);
+				get_track_parameter(connection, device, &error, "Title", &song);
+				if(dbus_error_is_set(&error)) printf("%s", error.message);
 				
-				if(song) send_info(fd, song, 0x04);
+				if(song) {
+                    send_info(fd, song, 0x04);
+                }
 				
 				char *album = NULL;
 				dbus_error_init(&error);
-				get_track_parameter(connection, "org.bluez",
-								 "/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0",
-								 "org.bluez.MediaPlayer1",
-								 "Track",
-								 &error, "Album", &album);
-				//if(dbus_error_is_set(&error)) printf("%s", error.message);
+				get_track_parameter(connection, device, &error, "Album", &album);
+				if(dbus_error_is_set(&error)) printf("%s", error.message);
 				
-				if(album) send_info(fd, album, 0x01);
+				if(album) {
+                    send_info(fd, album, 0x01);
+				}
 				
 				char *artist = NULL;
 				dbus_error_init(&error);
-				get_track_parameter(connection, "org.bluez",
-								 "/org/bluez/hci0/dev_64_BC_0C_F9_8C_4E/player0",
-								 "org.bluez.MediaPlayer1",
-								 "Track",
-								 &error, "Artist", &artist);
-				//if(dbus_error_is_set(&error)) printf("%s", error.message);
+				get_track_parameter(connection, device, &error, "Artist", &artist);
+				if(dbus_error_is_set(&error)) printf("%s", error.message);
 				
-				if(artist) send_info(fd, artist, 0x05);
+				if(artist) {
+                    send_info(fd, artist, 0x05);
+				}
 				
-				send_info(fd, "Playing Bluetooth", 0x00);
                 send_info(fd, "", 0x02);
             }
         }
